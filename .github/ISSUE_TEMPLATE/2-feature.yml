@@ -1,0 +1,53 @@
+name: "✨ 기능 구현"
+description: 매니패스트에 정의된 기능/스펙을 실제로 구현하는 작업
+title: "[Feature] "
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: 담당 파트
+      options:
+        - AI (김민섭)
+        - FE (김성민)
+        - BE (김준한·김재원)
+        - 디자인 (고나영)
+        - 전체/공통
+    validations:
+      required: true
+
+  - type: input
+    id: related-id
+    attributes:
+      label: 관련 Manyfast ID (필수)
+      description: 트래커/매니패스트에 있는 요구사항·기능·스펙 ID. 없는 작업이면 먼저 매니패스트에 등록부터 해주세요.
+      placeholder: "F-XXXXXX 또는 S-XXXXXX"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 무엇을 만드나요
+      description: 매니패스트 본문을 그대로 붙여넣어도 됩니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 기준 (수락 기준)
+      description: 이 조건이 다 되면 완료로 간주합니다.
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: depends-on
+    attributes:
+      label: 선행/연동 작업
+      description: 다른 파트 작업이 먼저 끝나야 하나요? (예 AI-BE 연결은 BE API 먼저 필요)
+    validations:
+      required: false

@@ -1,0 +1,59 @@
+name: "🐛 버그 리포트"
+description: 동작해야 하는데 안 되는 것
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: 담당 파트
+      options:
+        - AI (김민섭)
+        - FE (김성민)
+        - BE (김준한·김재원)
+        - 디자인 (고나영)
+        - 전체/공통
+    validations:
+      required: true
+
+  - type: input
+    id: related-id
+    attributes:
+      label: 관련 Manyfast ID
+      description: 관련된 요구사항/기능/스펙 ID가 있으면 적어주세요. (예 R-HSQDSU, F-NYSIWY, S-SWMISG)
+      placeholder: "F-XXXXXX"
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 무슨 일이 일어났나요
+      description: 실제로 어떻게 동작했는지
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 원래 어떻게 동작해야 하나요
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 방법
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 스크린샷 / 로그 / 추가 정보
+    validations:
+      required: false

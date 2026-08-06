@@ -1,0 +1,39 @@
+name: "✅ 일반 작업"
+description: 버그도 기능도 아닌 작업 (배포, 문서화, PT 준비 등)
+title: "[Task] "
+labels: ["task"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: 담당 파트
+      options:
+        - AI (김민섭)
+        - FE (김성민)
+        - BE (김준한·김재원)
+        - 디자인 (고나영)
+        - 전체/공통
+    validations:
+      required: true
+
+  - type: input
+    id: due
+    attributes:
+      label: 목표일
+      description: 트래커 캘린더 기준 날짜 (예 8/20)
+    validations:
+      required: false
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 할 일
+    validations:
+      required: true
+
+  - type: textarea
+    id: done-when
+    attributes:
+      label: 완료 조건
+    validations:
+      required: false

@@ -1,0 +1,41 @@
+title: "[Standup] 8/"
+labels: ["standup"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        시간대 안 맞아서 못 모이는 날 이거 하나씩 남겨두면 됨. (Follow-the-Sun 대신 이거 쓰는 거)
+
+  - type: dropdown
+    id: part
+    attributes:
+      label: 파트
+      options:
+        - AI (김민섭)
+        - FE (김성민)
+        - BE (김준한·김재원)
+        - 디자인 (고나영)
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: 오늘 한 것
+    validations:
+      required: true
+
+  - type: textarea
+    id: next
+    attributes:
+      label: 다음에 할 것 / 다음 사람이 이어받을 부분
+    validations:
+      required: false
+
+  - type: textarea
+    id: blocked
+    attributes:
+      label: 막혀있는 것
+      description: 없으면 비워두세요
+    validations:
+      required: false

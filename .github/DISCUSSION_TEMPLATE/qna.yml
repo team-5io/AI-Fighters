@@ -1,0 +1,41 @@
+title: "[Q&A] "
+labels: ["question"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: 누구한테 묻는 질문인가요
+      options:
+        - AI (김민섭)
+        - FE (김성민)
+        - BE (김준한·김재원)
+        - 디자인 (고나영)
+        - 아무나/전체
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 질문
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 배경/시도해본 것
+      description: 이미 해본 게 있으면 적어주세요 — 중복 답변 방지
+    validations:
+      required: false
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: 긴급도
+      options:
+        - 지금 막혀있음 (바로 답 필요)
+        - 오늘 안에 알면 됨
+        - 급하지 않음
+    validations:
+      required: true

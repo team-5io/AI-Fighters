@@ -1,0 +1,38 @@
+title: "[Idea] "
+labels: ["idea"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: 관련 파트
+      options:
+        - AI
+        - FE
+        - BE
+        - 디자인
+        - 전체 방향/기획
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 아이디어
+      description: 뭘 제안하고 싶나요
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 필요한가요
+      description: 어떤 문제를 해결하나요, 없으면 어떻게 되나요
+    validations:
+      required: false
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 지금 해커톤 범위에 넣을지 후속 범위로 미룰지 의견
+    validations:
+      required: false
