@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://ai_fighters:ai_fighters@db:5432/ai_fighters
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - ./app:/app/app
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ai_fighters
+      POSTGRES_PASSWORD: ai_fighters
+      POSTGRES_DB: ai_fighters
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
