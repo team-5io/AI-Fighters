@@ -2,28 +2,18 @@ import hashlib
 import json
 from uuid import UUID
 
-from google import genai
 from google.genai import types
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.translation_cache import TranslationCache
+from app.services.llm_client import get_genai_client
 
 
 class LLMTranslationResult(BaseModel):
     translated_content: str
     preserved_terms: list[str]
-
-
-_client: genai.Client | None = None
-
-
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
-    return _client
 
 
 def call_translation_llm(content: str, source_lang: str, target_lang: str) -> LLMTranslationResult:
@@ -34,7 +24,7 @@ def call_translation_llm(content: str, source_lang: str, target_lang: str) -> LL
         "each one you kept untranslated in preserved_terms.\n\n"
         f"Text:\n{content}"
     )
-    response = _get_client().models.generate_content(
+    response = get_genai_client().models.generate_content(
         model=settings.gemini_model,
         contents=prompt,
         config=types.GenerateContentConfig(
