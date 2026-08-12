@@ -2,9 +2,50 @@ import hashlib
 import json
 from uuid import UUID
 
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.translation_cache import TranslationCache
+
+
+class LLMTranslationResult(BaseModel):
+    translated_content: str
+    preserved_terms: list[str]
+
+
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=settings.gemini_api_key)
+    return _client
+
+
+def call_translation_llm(content: str, source_lang: str, target_lang: str) -> LLMTranslationResult:
+    prompt = (
+        f"Translate the following text from {source_lang} to {target_lang}.\n"
+        "Keep proper nouns, product names, and domain-specific terms "
+        "(e.g. 'Doc PR', 'RACI') untranslated in the translation, and list "
+        "each one you kept untranslated in preserved_terms.\n\n"
+        f"Text:\n{content}"
+    )
+    response = _get_client().models.generate_content(
+        model=settings.gemini_model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=LLMTranslationResult,
+        ),
+    )
+    result = response.parsed
+    if not isinstance(result, LLMTranslationResult):
+        raise RuntimeError("translation_failed: empty or malformed LLM response")
+    return result
 
 
 def _hash_content(content: str) -> str:
