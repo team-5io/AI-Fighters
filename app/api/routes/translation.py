@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.translation import TranslationRequest, TranslationResponse
+from app.services.cio_orchestrator import review_ai_output
 from app.services.translation import (
     call_translation_llm,
     deserialize_preserved_terms,
@@ -47,6 +48,12 @@ def translate(payload: TranslationRequest, db: Session = Depends(get_db)) -> Tra
             "translation failed for document_id=%s target_lang=%s", payload.document_id, payload.target_lang
         )
         return JSONResponse(status_code=502, content={"error": "translation_failed"})
+
+    try:
+        review_ai_output("translation", payload.content, result.translated_content)
+    except Exception:
+        # CIO 2차 검토는 참고용 — 실패해도 번역 응답 자체는 그대로 내려준다.
+        logger.exception("cio review failed for document_id=%s", payload.document_id)
 
     return TranslationResponse(
         translated_content=row.translated_content,

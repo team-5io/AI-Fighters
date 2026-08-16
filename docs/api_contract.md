@@ -11,6 +11,10 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 - AI-Fighters 자체에는 인증/인가 로직이 없다 (BE가 전담). 내부망 전용 엔드포인트로 취급한다.
 - 아래 요청/응답의 사용자 식별자(`adoptedBy`, `requestedBy` 등)는 BE `UserEntity`의 내부 PK(`Long`)가
   아니라, 외부 노출용으로 별도 발급하는 `publicId`(UUID)다.
+- **(2026-08-17 추가)** 아래 세 엔드포인트(Translation/Writing Assistant/DocumentLion)는 결과를 내려주기
+  전에 내부적으로 CIO 2차 검토(`AI 제안 결과 2차 검토`, Notion "AI CIO 오케스트레이션")를 거친다. 이건
+  순수 내부 로직이라 요청/응답 스펙에는 영향 없고, 검토가 실패해도 원래 응답은 그대로 내려간다 — BE가
+  신경 쓸 부분 없음.
 
 ---
 
