@@ -1,16 +1,27 @@
 # AI-Fighters REST API 계약 (v1)
 
 Base URL: `/api/ai`
-인증: BE(Spring)와 동일한 세션/JWT를 그대로 사용 — 별도 로그인 없음 (확정 필요 시 BE와 재확인)
 
-호출 주체 표기: **FE** = 성민이 프론트에서 직접 호출 / **BE** = Doc PR 제출 시 Spring이 서버 간 호출
+**호출 방식 (2026-08-14 확정)**: 아래 엔드포인트는 전부 **BE(Spring)가 게이트웨이로 프록시**한다.
+FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가를 처리한 뒤 서버 간으로 AI-Fighters를
+호출하고, 결과를 `GlobalApiResponse`로 감싸서 FE에 내려준다. DocumentLion 자동 트리거에만 쓰이던
+패턴을 전 도메인으로 확장한 것. 아래 각 엔드포인트의 "트리거"는 이 호출을 최초로 발생시키는
+주체(FE 사용자 액션 vs BE 자동)만 나타낸다 — 실제 HTTP 호출 주체는 항상 BE다.
+
+- AI-Fighters 자체에는 인증/인가 로직이 없다 (BE가 전담). 내부망 전용 엔드포인트로 취급한다.
+- 아래 요청/응답의 사용자 식별자(`adoptedBy`, `requestedBy` 등)는 BE `UserEntity`의 내부 PK(`Long`)가
+  아니라, 외부 노출용으로 별도 발급하는 `publicId`(UUID)다.
+- **(2026-08-17 추가)** 아래 세 엔드포인트(Translation/Writing Assistant/DocumentLion)는 결과를 내려주기
+  전에 내부적으로 CIO 2차 검토(`AI 제안 결과 2차 검토`, Notion "AI CIO 오케스트레이션")를 거친다. 이건
+  순수 내부 로직이라 요청/응답 스펙에는 영향 없고, 검토가 실패해도 원래 응답은 그대로 내려간다 — BE가
+  신경 쓸 부분 없음.
 
 ---
 
 ## 1. Dev-aware Translation
 
 ### `POST /api/ai/translations`
-호출: **FE**
+트리거: **FE** (사용자 요청) → BE 프록시
 
 문서를 번역한다. 원문 내용은 FE가 이미 들고 있는 걸 그대로 전달한다 (AI-Fighters가 BE DB를 직접 조회하지 않음).
 
@@ -39,7 +50,7 @@ Base URL: `/api/ai`
 ## 2. AI Writing Assistant
 
 ### `POST /api/ai/writing-assistant/suggestions`
-호출: **FE** (작성자가 버튼/단축키로 명시적 요청할 때만)
+트리거: **FE** (작성자가 버튼/단축키로 명시적 요청할 때만) → BE 프록시
 
 ```json
 // Request
@@ -60,21 +71,25 @@ Base URL: `/api/ai`
 ```
 
 > `type`으로 유형 태그를 구분해서 내려준다. **다만 이걸 사이드 패널에서 유형별로 묶어 보여줄지, 구분 없이 목록으로만 보여줄지는 아직 성민과 확정 안 됐다** (아래 열린 질문 참고) — API 응답 필드는 어느 쪽으로 가든 그대로 쓸 수 있게 잡아뒀다. 제안 목록만 내려오며 저장은 FE가 수락한 항목만 본문에 반영.
+>
+> `structure` 타입은 Notion "문서 구조 가이드 제안" 스펙대로 문서에 필요한 목차·필수 섹션 구조(빠진 섹션, 순서 재배치 등)를 추천한다. "관련 문서 맥락 인용 지원"(Document Graph 연동)은 별도 기능이며 아직 BE에 그 API가 없어 미구현.
 
 ---
 
 ## 3. DocumentLion
 
 ### `POST /api/ai/document-lion/reviews`
-호출: **FE**(검토 버튼) 또는 **BE**(Doc PR 제출 시 자동 호출)
+트리거: **FE**(검토 버튼) 또는 **자동**(Doc PR 제출 시) — 둘 다 BE 프록시
 
 ```json
 // Request
 {
   "documentId": "uuid",
   "docPrId": "uuid | null",
+  "teamId": "uuid",          // (2026-08-17 추가) 채택된 Charter 규칙 조회용 — 협업 규칙 위반 검토에 필수
   "triggerType": "manual",   // "manual" | "auto"
-  "requestedBy": "uuid"      // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 userId를 채워서 보낸다
+  "requestedBy": "uuid",     // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 userId를 채워서 보낸다
+  "content": "string"        // (2026-08-17 추가) 문서 본문 — AI가 BE DB를 직접 조회하지 않으므로 필수
 }
 
 // Response 200
@@ -95,10 +110,11 @@ Base URL: `/api/ai`
 ```
 
 - `overallVerdict`는 `issues`에 `critical`이 하나라도 있으면 `reject_recommended`, 없으면 `approve`.
-- **BE 연동**: Doc PR이 "리뷰 대기" 상태로 바뀌는 시점에 BE가 이 엔드포인트를 `triggerType: "auto"`로 호출 — BE 채널에 공지해둔 웹훅 방식과 동일.
+- Doc PR이 "리뷰 대기" 상태로 바뀌는 시점에 BE가 이 엔드포인트를 `triggerType: "auto"`로 호출한다.
+- **(2026-08-17 기준 제약)** `issueType: "charter_violation"`만 실제로 검사한다. `"conflict"`/`"inconsistency"`는 BE의 문서 관계 그래프 조회 API(`GET /documents/{id}/graph`)가 아직 없어서 항상 이슈 없음으로 나온다 — 그 API 준비되면 연동 예정.
 
 ### `GET /api/ai/document-lion/reviews/{reviewId}`
-호출: **FE** (리뷰 화면 재진입 시 결과 다시 조회)
+트리거: **FE** (리뷰 화면 재진입 시 결과 다시 조회) → BE 프록시
 
 ```json
 // Response 200 — 위 POST 응답과 동일 형태
@@ -111,26 +127,26 @@ Base URL: `/api/ai`
 > `charter_rule` 테이블은 규칙 하나하나가 각자 `id`를 가진 독립 행이고, 여러 규칙을 묶는 "Charter" 상위 엔티티는 ERD에 따로 없다. 그래서 아래 API도 규칙 단위로 조작하고, 채택만 팀 단위 일괄 처리로 뺐다 (이전 초안은 없는 `charterId`를 상위 리소스로 쓰고 있어서 여기서 고쳤다).
 
 ### `POST /api/ai/charter/generate`
-호출: **FE** (팀 생성 초기 1회)
+트리거: **FE** (팀 생성 초기 1회) → BE 프록시
 ```json
 // Request  { "teamId": "uuid" }
 // Response { "rules": [{ "id": "uuid", "status": "draft", "title": "string", "description": "string" }] }
 ```
 
 ### `PATCH /api/ai/charter/rules/{ruleId}`
-호출: **FE** — 규칙 하나 수정
+트리거: **FE** — 규칙 하나 수정 → BE 프록시
 ```json
 // Request { "title": "string", "description": "string" }
 ```
 
 ### `POST /api/ai/charter/adopt`
-호출: **FE** — 지정한 규칙들을 공식 규칙으로 일괄 채택 (이후 DocumentLion 검토 기준으로 사용)
+트리거: **FE** — 지정한 규칙들을 공식 규칙으로 일괄 채택 (이후 DocumentLion 검토 기준으로 사용) → BE 프록시
 ```json
 // Request { "teamId": "uuid", "ruleIds": ["uuid"], "adoptedBy": "uuid" }
 ```
 
 ### `GET /api/ai/charter/rules?teamId=uuid`
-호출: **FE** — 현재 팀의 규칙 목록 조회 (draft·adopted·archived 전체, `status`로 필터 가능)
+트리거: **FE** — 현재 팀의 규칙 목록 조회 (draft·adopted·archived 전체, `status`로 필터 가능) → BE 프록시
 
 ---
 
