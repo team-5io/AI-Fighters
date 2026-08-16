@@ -80,8 +80,10 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 {
   "documentId": "uuid",
   "docPrId": "uuid | null",
+  "teamId": "uuid",          // (2026-08-17 추가) 채택된 Charter 규칙 조회용 — 협업 규칙 위반 검토에 필수
   "triggerType": "manual",   // "manual" | "auto"
-  "requestedBy": "uuid"      // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 userId를 채워서 보낸다
+  "requestedBy": "uuid",     // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 userId를 채워서 보낸다
+  "content": "string"        // (2026-08-17 추가) 문서 본문 — AI가 BE DB를 직접 조회하지 않으므로 필수
 }
 
 // Response 200
@@ -103,6 +105,7 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 
 - `overallVerdict`는 `issues`에 `critical`이 하나라도 있으면 `reject_recommended`, 없으면 `approve`.
 - Doc PR이 "리뷰 대기" 상태로 바뀌는 시점에 BE가 이 엔드포인트를 `triggerType: "auto"`로 호출한다.
+- **(2026-08-17 기준 제약)** `issueType: "charter_violation"`만 실제로 검사한다. `"conflict"`/`"inconsistency"`는 BE의 문서 관계 그래프 조회 API(`GET /documents/{id}/graph`)가 아직 없어서 항상 이슈 없음으로 나온다 — 그 API 준비되면 연동 예정.
 
 ### `GET /api/ai/document-lion/reviews/{reviewId}`
 트리거: **FE** (리뷰 화면 재진입 시 결과 다시 조회) → BE 프록시
