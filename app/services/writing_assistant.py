@@ -20,8 +20,8 @@ def call_writing_assistant_llm(content: str, cursor_context: str, count: int | N
     prompt = (
         f"Suggest exactly {suggestion_count} writing improvements for the text below, "
         "focused on the cursor position given in cursor_context. Each suggestion must have "
-        "a type: 'structure' (문서 구조 개선), 'next-paragraph' (다음 문단 제안), "
-        "or 'clarity' (명확성 개선).\n\n"
+        "a type: 'structure' (문서에 필요한 목차·필수 섹션 구조를 추천— 예: 빠진 섹션, 순서 재배치), "
+        "'next-paragraph' (다음 문단 제안), or 'clarity' (명확성 개선).\n\n"
         f"Text:\n{content}\n\n"
         f"Cursor context:\n{cursor_context}"
     )

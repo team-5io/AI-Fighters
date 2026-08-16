@@ -25,6 +25,20 @@ def test_returns_suggestions_from_llm(mock_get_client):
 
 
 @patch("app.services.writing_assistant.get_genai_client")
+def test_structure_suggestion_prompt_asks_for_toc_and_required_sections(mock_get_client):
+    """Notion 기능명세서 "문서 구조 가이드 제안": 목차·필수 섹션 구조를 추천해야 한다."""
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = MagicMock(parsed=LLMSuggestionsResult(suggestions=[]))
+    mock_get_client.return_value = mock_client
+
+    call_writing_assistant_llm("본문 내용", "커서 주변 문맥")
+
+    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+    assert "목차" in prompt
+    assert "필수 섹션" in prompt
+
+
+@patch("app.services.writing_assistant.get_genai_client")
 def test_truncates_to_configured_count(mock_get_client):
     parsed = LLMSuggestionsResult(
         suggestions=[
