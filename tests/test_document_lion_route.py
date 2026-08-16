@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.db.session import get_db
 from app.main import app
+from app.services.cio_orchestrator import CioReviewVerdict
 from app.services.document_lion import LLMReviewIssue, LLMReviewResult
 
 client = TestClient(app)
@@ -39,10 +40,11 @@ def _fake_issue(**overrides):
     return issue
 
 
+@patch("app.api.routes.document_lion.review_ai_output")
 @patch("app.api.routes.document_lion.create_review")
 @patch("app.api.routes.document_lion.call_document_lion_llm")
 @patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
-def test_create_review_returns_review_with_issues(mock_fetch_rules, mock_llm, mock_create):
+def test_create_review_returns_review_with_issues(mock_fetch_rules, mock_llm, mock_create, mock_cio):
     _override_get_db(MagicMock())
     mock_fetch_rules.return_value = []
     mock_llm.return_value = LLMReviewResult(
@@ -50,6 +52,7 @@ def test_create_review_returns_review_with_issues(mock_fetch_rules, mock_llm, mo
     )
     fake_review = _fake_review(overall_verdict="reject_recommended")
     mock_create.return_value = (fake_review, [_fake_issue()])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
 
     response = client.post(
         "/api/ai/document-lion/reviews",
@@ -68,6 +71,32 @@ def test_create_review_returns_review_with_issues(mock_fetch_rules, mock_llm, mo
     assert body["overallVerdict"] == "reject_recommended"
     assert len(body["issues"]) == 1
     assert body["issues"][0]["issueType"] == "charter_violation"
+    mock_cio.assert_called_once_with("document_lion", "문서 본문", "리뷰 SLA 규칙 위반")
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_cio_review_failure_does_not_break_response(mock_fetch_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_fetch_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.side_effect = RuntimeError("cio_review_failed")
+
+    response = client.post(
+        "/api/ai/document-lion/reviews",
+        json={
+            "documentId": str(uuid4()),
+            "teamId": str(uuid4()),
+            "triggerType": "manual",
+            "requestedBy": str(uuid4()),
+            "content": "문서 본문",
+        },
+    )
+
+    assert response.status_code == 200
 
 
 @patch("app.api.routes.document_lion.fetch_adopted_charter_rules")

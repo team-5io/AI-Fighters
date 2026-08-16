@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models.document_review import DocumentReview
 from app.models.document_review_issue import DocumentReviewIssue
 from app.schemas.document_lion import ReviewIssue, ReviewRequest, ReviewResponse
+from app.services.cio_orchestrator import review_ai_output
 from app.services.document_lion import (
     CharterRuleContext,
     call_document_lion_llm,
@@ -54,6 +55,13 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
     except Exception:
         logger.exception("document lion review failed for document_id=%s", payload.document_id)
         return JSONResponse(status_code=502, content={"error": "document_lion_review_failed"})
+
+    try:
+        output_text = "\n".join(issue.description for issue in issues)
+        review_ai_output("document_lion", payload.content, output_text)
+    except Exception:
+        # CIO 2차 검토는 참고용 — 실패해도 리뷰 응답 자체는 그대로 내려준다.
+        logger.exception("cio review failed for document_id=%s", payload.document_id)
 
     return _to_response(review, issues)
 

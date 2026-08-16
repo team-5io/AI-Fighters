@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.db.session import get_db
 from app.main import app
+from app.services.cio_orchestrator import CioReviewVerdict
 from app.services.translation import LLMTranslationResult
 
 client = TestClient(app)
@@ -48,15 +49,17 @@ def test_returns_cached_translation_without_calling_llm(mock_get_cached):
     mock_llm.assert_not_called()
 
 
+@patch("app.api.routes.translation.review_ai_output")
 @patch("app.api.routes.translation.save_translation")
 @patch("app.api.routes.translation.call_translation_llm")
 @patch("app.api.routes.translation.get_cached_translation")
-def test_cache_miss_calls_llm_and_saves(mock_get_cached, mock_llm, mock_save):
+def test_cache_miss_calls_llm_and_saves(mock_get_cached, mock_llm, mock_save, mock_cio):
     fake_db = MagicMock()
     _override_get_db(fake_db)
     mock_get_cached.return_value = None
     mock_llm.return_value = LLMTranslationResult(translated_content="Hello", preserved_terms=["Doc PR"])
     mock_save.return_value = MagicMock(translated_content="Hello")
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
 
     response = client.post("/api/ai/translations", json=_request_body(uuid4()))
 
@@ -66,6 +69,26 @@ def test_cache_miss_calls_llm_and_saves(mock_get_cached, mock_llm, mock_save):
     assert body["translatedContent"] == "Hello"
     assert body["preservedTerms"] == ["Doc PR"]
     mock_save.assert_called_once()
+    mock_cio.assert_called_once_with("translation", "안녕하세요", "Hello")
+
+
+@patch("app.api.routes.translation.review_ai_output")
+@patch("app.api.routes.translation.save_translation")
+@patch("app.api.routes.translation.call_translation_llm")
+@patch("app.api.routes.translation.get_cached_translation")
+def test_cio_review_failure_does_not_break_response(mock_get_cached, mock_llm, mock_save, mock_cio):
+    """CIO 2차 검토는 참고용이라, 검토 자체가 실패해도 번역 응답은 정상 반환돼야 한다."""
+    fake_db = MagicMock()
+    _override_get_db(fake_db)
+    mock_get_cached.return_value = None
+    mock_llm.return_value = LLMTranslationResult(translated_content="Hello", preserved_terms=[])
+    mock_save.return_value = MagicMock(translated_content="Hello")
+    mock_cio.side_effect = RuntimeError("cio_review_failed")
+
+    response = client.post("/api/ai/translations", json=_request_body(uuid4()))
+
+    assert response.status_code == 200
+    assert response.json()["translatedContent"] == "Hello"
 
 
 @patch("app.api.routes.translation.call_translation_llm")
