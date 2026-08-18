@@ -63,7 +63,7 @@ def adopt_rules(payload: AdoptRulesRequest, db: Session = Depends(get_db)) -> No
 
 @router.get("/rules", response_model=CharterRulesResponse)
 def list_rules(
-    team_id: UUID = Query(..., alias="teamId"),
+    team_id: int = Query(..., alias="teamId"),
     status: RuleStatus | None = Query(None),
     db: Session = Depends(get_db),
 ) -> CharterRulesResponse:

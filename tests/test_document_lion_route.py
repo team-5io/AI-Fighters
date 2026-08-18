@@ -57,9 +57,9 @@ def test_create_review_returns_review_with_issues(mock_fetch_rules, mock_llm, mo
     response = client.post(
         "/api/ai/document-lion/reviews",
         json={
-            "documentId": str(uuid4()),
-            "docPrId": str(uuid4()),
-            "teamId": str(uuid4()),
+            "documentId": 100,
+            "docPrId": 7,
+            "teamId": 1,
             "triggerType": "auto",
             "requestedBy": str(uuid4()),
             "content": "문서 본문",
@@ -88,8 +88,8 @@ def test_cio_review_failure_does_not_break_response(mock_fetch_rules, mock_llm, 
     response = client.post(
         "/api/ai/document-lion/reviews",
         json={
-            "documentId": str(uuid4()),
-            "teamId": str(uuid4()),
+            "documentId": 100,
+            "teamId": 1,
             "triggerType": "manual",
             "requestedBy": str(uuid4()),
             "content": "문서 본문",
@@ -107,8 +107,8 @@ def test_create_review_llm_failure_returns_502(mock_fetch_rules):
     response = client.post(
         "/api/ai/document-lion/reviews",
         json={
-            "documentId": str(uuid4()),
-            "teamId": str(uuid4()),
+            "documentId": 100,
+            "teamId": 1,
             "triggerType": "manual",
             "requestedBy": str(uuid4()),
             "content": "문서 본문",

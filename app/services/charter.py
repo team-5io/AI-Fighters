@@ -48,7 +48,7 @@ def call_charter_llm(count: int | None = None) -> list[LLMCharterRule]:
     return result.rules[:rule_count]
 
 
-def create_draft_rules(db: Session, team_id: UUID, llm_rules: list[LLMCharterRule]) -> list[CharterRule]:
+def create_draft_rules(db: Session, team_id: int, llm_rules: list[LLMCharterRule]) -> list[CharterRule]:
     rows = [
         CharterRule(
             team_ref=team_id,
@@ -78,7 +78,7 @@ def update_rule(db: Session, rule: CharterRule, title: str, description: str) ->
     return rule
 
 
-def adopt_rules(db: Session, team_id: UUID, rule_ids: list[UUID], adopted_by: UUID) -> None:
+def adopt_rules(db: Session, team_id: int, rule_ids: list[UUID], adopted_by: UUID) -> None:
     db.query(CharterRule).filter(
         CharterRule.team_ref == team_id,
         CharterRule.id.in_(rule_ids),
@@ -93,7 +93,7 @@ def adopt_rules(db: Session, team_id: UUID, rule_ids: list[UUID], adopted_by: UU
     db.commit()
 
 
-def list_rules(db: Session, team_id: UUID, status: str | None = None) -> list[CharterRule]:
+def list_rules(db: Session, team_id: int, status: str | None = None) -> list[CharterRule]:
     query = db.query(CharterRule).filter(CharterRule.team_ref == team_id)
     if status is not None:
         query = query.filter(CharterRule.status == status)

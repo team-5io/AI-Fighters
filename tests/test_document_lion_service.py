@@ -12,7 +12,7 @@ from app.services.document_lion import (
 class TestFetchAdoptedCharterRules:
     def test_filters_by_team_and_adopted_status(self):
         db = MagicMock()
-        team_id = uuid4()
+        team_id = 1
         expected = [MagicMock()]
         db.query.return_value.filter.return_value.all.return_value = expected
 
@@ -25,7 +25,7 @@ class TestFetchAdoptedCharterRules:
 class TestCreateReview:
     def test_approve_when_no_critical_issues(self):
         db = MagicMock()
-        document_id = uuid4()
+        document_id = 100
         requested_by = uuid4()
         llm_issues = [LLMReviewIssue(severity="minor", issue_type="charter_violation", description="사소한 위반")]
 
@@ -47,14 +47,14 @@ class TestCreateReview:
             LLMReviewIssue(severity="critical", issue_type="charter_violation", description="심각한 위반"),
         ]
 
-        review, _ = create_review(db, uuid4(), uuid4(), "auto", uuid4(), llm_issues)
+        review, _ = create_review(db, 100, 7, "auto", uuid4(), llm_issues)
 
         assert review.overall_verdict == "reject_recommended"
 
     def test_no_issues_means_approve_and_empty_list(self):
         db = MagicMock()
 
-        review, issues = create_review(db, uuid4(), None, "manual", uuid4(), [])
+        review, issues = create_review(db, 100, None, "manual", uuid4(), [])
 
         assert review.overall_verdict == "approve"
         assert issues == []

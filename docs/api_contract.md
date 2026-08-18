@@ -92,12 +92,12 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 ```json
 // Request
 {
-  "documentId": "uuid",
-  "docPrId": "uuid | null",
-  "teamId": "uuid",          // (2026-08-17 추가) 채택된 Charter 규칙 조회용 — 협업 규칙 위반 검토에 필수
-  "triggerType": "manual",   // "manual" | "auto"
-  "requestedBy": "uuid",     // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 userId를 채워서 보낸다
-  "content": "string"        // (2026-08-17 추가) 문서 본문 — AI가 BE DB를 직접 조회하지 않으므로 필수
+  "documentId": 42,
+  "docPrId": 7,               // number | null
+  "teamId": 1,                // (2026-08-17 추가) 채택된 Charter 규칙 조회용 — 협업 규칙 위반 검토에 필수
+  "triggerType": "manual",    // "manual" | "auto"
+  "requestedBy": "uuid",      // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 publicId(userId)를 채워서 보낸다
+  "content": "string"         // (2026-08-17 추가) 문서 본문 — AI가 BE DB를 직접 조회하지 않으므로 필수
 }
 
 // Response 200
@@ -109,7 +109,7 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
       "severity": "critical",     // "critical" | "medium" | "minor"
       "issueType": "conflict",    // "conflict" | "inconsistency" | "charter_violation"
       "description": "string",
-      "relatedDocumentId": "uuid",
+      "relatedDocumentId": 42,
       "charterRuleId": null,
       "locationRef": "string"
     }
@@ -117,6 +117,7 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 }
 ```
 
+- **(2026-08-19 수정)** `documentId`/`docPrId`/`teamId`/`relatedDocumentId`는 BE의 내부 PK(`Long`)를 그대로 쓴다 — Document/DocPr/Team은 `requestedBy`(userId)와 달리 별도 publicId가 없다. 예전엔 전부 `uuid`로 잘못 잡혀있었음(Translation의 `documentId` 버그와 동일 유형).
 - `overallVerdict`는 `issues`에 `critical`이 하나라도 있으면 `reject_recommended`, 없으면 `approve`.
 - Doc PR이 "리뷰 대기" 상태로 바뀌는 시점에 BE가 이 엔드포인트를 `triggerType: "auto"`로 호출한다.
 - **(2026-08-17 기준 제약)** `issueType: "charter_violation"`만 실제로 검사한다. `"conflict"`/`"inconsistency"`는 BE의 문서 관계 그래프 조회 API(`GET /documents/{id}/graph`)가 아직 없어서 항상 이슈 없음으로 나온다 — 그 API 준비되면 연동 예정.
@@ -137,9 +138,10 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 ### `POST /api/ai/charter/generate`
 트리거: **FE** (팀 생성 초기 1회) → BE 프록시
 ```json
-// Request  { "teamId": "uuid" }
+// Request  { "teamId": 1 }
 // Response { "rules": [{ "id": "uuid", "status": "draft", "title": "string", "description": "string" }] }
 ```
+- **(2026-08-19 수정)** `teamId`는 BE `Team.id`(`Long`) — 예전엔 `uuid`로 잘못 잡혀있었음. 규칙 `id`는 AI-Fighters 자체 PK라 그대로 `uuid`.
 
 ### `PATCH /api/ai/charter/rules/{ruleId}`
 트리거: **FE** — 규칙 하나 수정 → BE 프록시
@@ -150,10 +152,10 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 ### `POST /api/ai/charter/adopt`
 트리거: **FE** — 지정한 규칙들을 공식 규칙으로 일괄 채택 (이후 DocumentLion 검토 기준으로 사용) → BE 프록시
 ```json
-// Request { "teamId": "uuid", "ruleIds": ["uuid"], "adoptedBy": "uuid" }
+// Request { "teamId": 1, "ruleIds": ["uuid"], "adoptedBy": "uuid" }
 ```
 
-### `GET /api/ai/charter/rules?teamId=uuid`
+### `GET /api/ai/charter/rules?teamId=1`
 트리거: **FE** — 현재 팀의 규칙 목록 조회 (draft·adopted·archived 전체, `status`로 필터 가능) → BE 프록시
 
 ---
