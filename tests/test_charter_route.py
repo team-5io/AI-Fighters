@@ -37,7 +37,7 @@ def test_generate_charter_returns_draft_rules(mock_llm, mock_create):
     mock_llm.return_value = [LLMCharterRule(title="리뷰 SLA", description="24시간 이내 리뷰")]
     mock_create.return_value = [_fake_rule()]
 
-    response = client.post("/api/ai/charter/generate", json={"teamId": str(uuid4())})
+    response = client.post("/api/ai/charter/generate", json={"teamId": 1})
 
     assert response.status_code == 200
     body = response.json()
@@ -51,7 +51,7 @@ def test_generate_charter_llm_failure_returns_502(mock_llm):
     _override_get_db(MagicMock())
     mock_llm.side_effect = RuntimeError("charter_generation_failed")
 
-    response = client.post("/api/ai/charter/generate", json={"teamId": str(uuid4())})
+    response = client.post("/api/ai/charter/generate", json={"teamId": 1})
 
     assert response.status_code == 502
     assert response.json() == {"error": "charter_generation_failed"}
@@ -88,14 +88,14 @@ def test_update_rule_returns_404_when_not_found(mock_get_rule):
 @patch("app.api.routes.charter.adopt_rules_service")
 def test_adopt_rules_returns_204(mock_adopt):
     _override_get_db(MagicMock())
-    team_id = uuid4()
+    team_id = 1
     rule_ids = [uuid4(), uuid4()]
     adopted_by = uuid4()
 
     response = client.post(
         "/api/ai/charter/adopt",
         json={
-            "teamId": str(team_id),
+            "teamId": team_id,
             "ruleIds": [str(r) for r in rule_ids],
             "adoptedBy": str(adopted_by),
         },
@@ -113,7 +113,7 @@ def test_list_rules_returns_rules_for_team(mock_list):
     _override_get_db(MagicMock())
     mock_list.return_value = [_fake_rule(status="adopted")]
 
-    response = client.get(f"/api/ai/charter/rules?teamId={uuid4()}&status=adopted")
+    response = client.get("/api/ai/charter/rules?teamId=1&status=adopted")
 
     assert response.status_code == 200
     body = response.json()

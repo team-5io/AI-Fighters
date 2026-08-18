@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,7 +18,8 @@ class DocumentReviewIssue(Base):
     severity: Mapped[str] = mapped_column(String(10), nullable=False)
     issue_type: Mapped[str] = mapped_column(String(20), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    related_document_ref: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # BE Document.id는 Long — publicId 발급 대상이 아님 (UUID로 잘못 잡혀있던 것 수정)
+    related_document_ref: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     charter_rule_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("charter_rule.id", ondelete="SET NULL"), nullable=True
     )
