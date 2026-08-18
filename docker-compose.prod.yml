@@ -1,0 +1,25 @@
+services:
+  api:
+    image: ${DOCKERHUB_USERNAME}/ai-fighters:main
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  # api와 한 번에 배포되는 번들형 DB. 별도 RDS 없이 EC2 한 대로 배포를 완결하기 위함
+  # (DB 접속 정보는 EC2에 놓는 .env의 POSTGRES_*/DATABASE_URL로 채운다).
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
