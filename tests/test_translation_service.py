@@ -1,7 +1,6 @@
 import hashlib
 import json
 from unittest.mock import MagicMock
-from uuid import uuid4
 
 from app.services.translation import (
     deserialize_preserved_terms,
@@ -15,9 +14,9 @@ class TestGetCachedTranslation:
         db = MagicMock()
         expected = MagicMock()
         db.query.return_value.filter.return_value.one_or_none.return_value = expected
-        document_id = uuid4()
+        document_id = 42
 
-        result = get_cached_translation(db, document_id, "en")
+        result = get_cached_translation(db, document_id, "block-1", "en")
 
         assert result is expected
         db.query.return_value.filter.return_value.one_or_none.assert_called_once()
@@ -26,7 +25,7 @@ class TestGetCachedTranslation:
         db = MagicMock()
         db.query.return_value.filter.return_value.one_or_none.return_value = None
 
-        result = get_cached_translation(db, uuid4(), "en")
+        result = get_cached_translation(db, 42, "block-1", "en")
 
         assert result is None
 
@@ -34,13 +33,15 @@ class TestGetCachedTranslation:
 class TestSaveTranslation:
     def test_persists_row_with_expected_fields(self):
         db = MagicMock()
-        document_id = uuid4()
+        document_id = 42
+        block_id = "block-1"
         content = "안녕하세요"
         preserved_terms = ["Doc PR", "RACI"]
 
         row = save_translation(
             db,
             document_id=document_id,
+            block_id=block_id,
             source_lang="ko",
             target_lang="en",
             content=content,
@@ -49,6 +50,7 @@ class TestSaveTranslation:
         )
 
         assert row.document_ref == document_id
+        assert row.block_ref == block_id
         assert row.source_lang == "ko"
         assert row.target_lang == "en"
         assert row.translated_content == "Hello"
@@ -60,7 +62,8 @@ class TestSaveTranslation:
 
         row = save_translation(
             db,
-            document_id=uuid4(),
+            document_id=42,
+            block_id="block-1",
             source_lang="ko",
             target_lang="en",
             content="content",
@@ -77,7 +80,8 @@ class TestSaveTranslation:
 
         row = save_translation(
             db,
-            document_id=uuid4(),
+            document_id=42,
+            block_id="block-1",
             source_lang="ko",
             target_lang="en",
             content="content",

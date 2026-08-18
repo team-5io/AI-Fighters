@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,10 +10,13 @@ from app.db.base import Base
 
 class TranslationCache(Base):
     __tablename__ = "translation_cache"
-    __table_args__ = (UniqueConstraint("document_ref", "target_lang"),)
+    __table_args__ = (UniqueConstraint("document_ref", "block_ref", "target_lang"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    document_ref: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # BE Document.id는 Long(BIGINT) — publicId(UUID) 발급 대상이 아님. UUID로 잘못 잡혀있던 것 수정.
+    document_ref: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # BE blocks 테이블의 블록 id는 FE가 생성하는 문자열(VARCHAR(64))
+    block_ref: Mapped[str] = mapped_column(String(64), nullable=False)
     source_lang: Mapped[str] = mapped_column(String(10), nullable=False)
     target_lang: Mapped[str] = mapped_column(String(10), nullable=False)
     translated_content: Mapped[str] = mapped_column(Text, nullable=False)

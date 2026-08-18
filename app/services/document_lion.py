@@ -29,7 +29,7 @@ class LLMReviewResult(BaseModel):
     issues: list[LLMReviewIssue]
 
 
-def fetch_adopted_charter_rules(db: Session, team_id: UUID) -> list[CharterRule]:
+def fetch_adopted_charter_rules(db: Session, team_id: int) -> list[CharterRule]:
     return (
         db.query(CharterRule)
         .filter(CharterRule.team_ref == team_id, CharterRule.status == "adopted")
@@ -37,7 +37,7 @@ def fetch_adopted_charter_rules(db: Session, team_id: UUID) -> list[CharterRule]
     )
 
 
-def fetch_related_documents(document_id: UUID) -> list[dict]:
+def fetch_related_documents(document_id: int) -> list[dict]:
     # TODO: BE Document Graph 조회 API(GET /documents/{id}/graph)가 아직 시작 전 상태라
     # 연관 문서를 가져올 방법이 없다. API 준비되면 실제 연동으로 교체한다.
     # 그 전까지는 conflict/inconsistency 검토가 항상 이슈 없음으로 나온다.
@@ -71,8 +71,8 @@ def call_document_lion_llm(content: str, charter_rules: list[CharterRuleContext]
 
 def create_review(
     db: Session,
-    document_id: UUID,
-    doc_pr_id: UUID | None,
+    document_id: int,
+    doc_pr_id: int | None,
     trigger_type: str,
     requested_by: UUID,
     llm_issues: list[LLMReviewIssue],

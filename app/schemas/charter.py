@@ -7,7 +7,7 @@ RuleStatus = Literal["draft", "adopted", "archived"]
 
 
 class GenerateCharterRequest(CamelModel):
-    team_id: UUID
+    team_id: int
 
 
 class CharterRuleOut(CamelModel):
@@ -27,7 +27,7 @@ class UpdateRuleRequest(CamelModel):
 
 
 class AdoptRulesRequest(CamelModel):
-    team_id: UUID
+    team_id: int
     rule_ids: list[UUID]
     adopted_by: UUID
 

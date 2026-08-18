@@ -14,7 +14,7 @@ from app.services.charter import (
 class TestCreateDraftRules:
     def test_persists_one_row_per_llm_rule_as_draft(self):
         db = MagicMock()
-        team_id = uuid4()
+        team_id = 1
         llm_rules = [
             LLMCharterRule(title="리뷰 SLA", description="24시간 이내 리뷰"),
             LLMCharterRule(title="소통 채널", description="슬랙 #urgent"),
@@ -61,7 +61,7 @@ class TestUpdateRule:
 class TestAdoptRules:
     def test_bulk_updates_status_and_commits(self):
         db = MagicMock()
-        team_id = uuid4()
+        team_id = 1
         rule_ids = [uuid4(), uuid4()]
         adopted_by = uuid4()
 
@@ -79,7 +79,7 @@ class TestAdoptRules:
 class TestListRules:
     def test_filters_by_team_id_only_when_status_not_given(self):
         db = MagicMock()
-        team_id = uuid4()
+        team_id = 1
         expected = [MagicMock()]
         db.query.return_value.filter.return_value.order_by.return_value.all.return_value = expected
 
@@ -90,7 +90,7 @@ class TestListRules:
 
     def test_filters_by_status_when_given(self):
         db = MagicMock()
-        team_id = uuid4()
+        team_id = 1
         chained_filter = db.query.return_value.filter.return_value.filter
         chained_filter.return_value.order_by.return_value.all.return_value = []
 

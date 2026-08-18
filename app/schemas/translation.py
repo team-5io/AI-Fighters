@@ -1,10 +1,9 @@
-from uuid import UUID
-
 from app.schemas.base import CamelModel
 
 
 class TranslationRequest(CamelModel):
-    document_id: UUID
+    document_id: int
+    block_id: str
     content: str
     source_lang: str
     target_lang: str

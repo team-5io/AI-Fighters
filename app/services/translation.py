@@ -1,6 +1,5 @@
 import hashlib
 import json
-from uuid import UUID
 
 from google.genai import types
 from pydantic import BaseModel
@@ -42,11 +41,12 @@ def _hash_content(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
-def get_cached_translation(db: Session, document_id: UUID, target_lang: str) -> TranslationCache | None:
+def get_cached_translation(db: Session, document_id: int, block_id: str, target_lang: str) -> TranslationCache | None:
     return (
         db.query(TranslationCache)
         .filter(
             TranslationCache.document_ref == document_id,
+            TranslationCache.block_ref == block_id,
             TranslationCache.target_lang == target_lang,
         )
         .one_or_none()
@@ -55,7 +55,8 @@ def get_cached_translation(db: Session, document_id: UUID, target_lang: str) -> 
 
 def save_translation(
     db: Session,
-    document_id: UUID,
+    document_id: int,
+    block_id: str,
     source_lang: str,
     target_lang: str,
     content: str,
@@ -64,6 +65,7 @@ def save_translation(
 ) -> TranslationCache:
     row = TranslationCache(
         document_ref=document_id,
+        block_ref=block_id,
         source_lang=source_lang,
         target_lang=target_lang,
         translated_content=translated_content,
