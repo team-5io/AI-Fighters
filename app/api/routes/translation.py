@@ -21,7 +21,7 @@ router = APIRouter(prefix="/translations", tags=["translation"])
 
 @router.post("", response_model=TranslationResponse)
 def translate(payload: TranslationRequest, db: Session = Depends(get_db)) -> TranslationResponse | JSONResponse:
-    cached = get_cached_translation(db, payload.document_id, payload.target_lang)
+    cached = get_cached_translation(db, payload.document_id, payload.block_id, payload.target_lang)
     if cached is not None:
         return TranslationResponse(
             translated_content=cached.translated_content,
@@ -34,6 +34,7 @@ def translate(payload: TranslationRequest, db: Session = Depends(get_db)) -> Tra
         row = save_translation(
             db,
             document_id=payload.document_id,
+            block_id=payload.block_id,
             source_lang=payload.source_lang,
             target_lang=payload.target_lang,
             content=payload.content,
@@ -42,10 +43,11 @@ def translate(payload: TranslationRequest, db: Session = Depends(get_db)) -> Tra
         )
     except Exception:
         # 계약(docs/api_contract.md): 실패 시 재시도 없이 즉시 원문 표시 -> FE가 502로 판단.
-        # save_translation도 이 블록 안에 둬서, 동시 요청이 같은 (document_id, target_lang)로
+        # save_translation도 이 블록 안에 둬서, 동시 요청이 같은 (document_id, block_id, target_lang)로
         # 캐시 미스 후 동시에 저장을 시도해 UniqueConstraint에 걸리는 경우도 502로 처리한다.
         logger.exception(
-            "translation failed for document_id=%s target_lang=%s", payload.document_id, payload.target_lang
+            "translation failed for document_id=%s block_id=%s target_lang=%s",
+            payload.document_id, payload.block_id, payload.target_lang,
         )
         return JSONResponse(status_code=502, content={"error": "translation_failed"})
 

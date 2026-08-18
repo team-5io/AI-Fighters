@@ -23,12 +23,15 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 ### `POST /api/ai/translations`
 트리거: **FE** (사용자 요청) → BE 프록시
 
-문서를 번역한다. 원문 내용은 FE가 이미 들고 있는 걸 그대로 전달한다 (AI-Fighters가 BE DB를 직접 조회하지 않음).
+**(2026-08-18 변경)** 문서 본문이 블록 구조로 바뀌면서, 문서 전체가 아니라 **블록 하나당 한 번씩** 호출한다
+(`type: "code"`인 블록은 번역 대상에서 제외 — BE가 원문 그대로 유지하고 호출하지 않음). 원문 내용은 FE가
+이미 들고 있는 걸 그대로 전달한다 (AI-Fighters가 BE DB를 직접 조회하지 않음).
 
 ```json
 // Request
 {
-  "documentId": "uuid",
+  "documentId": 42,
+  "blockId": "string",
   "content": "string",
   "sourceLang": "ko",
   "targetLang": "en"
@@ -42,7 +45,12 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
 }
 ```
 
-- 캐시는 서버 내부에서 `documentId + targetLang` 기준으로 처리 (`translation_cache` 테이블). FE는 캐시 여부를 신경 쓸 필요 없음, 응답의 `cached` 필드만 참고.
+- `documentId`는 BE `Document`의 내부 PK(`Long`)를 그대로 쓴다 — 다른 엔드포인트의 `uuid`(`publicId`)와
+  달리 document는 별도 publicId가 없다. `blockId`는 BE `blocks` 테이블의 FE 생성 문자열 id.
+- 캐시는 서버 내부에서 `documentId + blockId + targetLang` 기준으로 처리 (`translation_cache` 테이블,
+  블록 단위로 세분화하기 전에는 `documentId + targetLang`만으로 유니크했음 — 블록별 호출로 바뀌면서
+  두 번째 블록부터 UniqueConstraint 위반이 나던 문제를 이렇게 해결). FE는 캐시 여부를 신경 쓸 필요 없음,
+  응답의 `cached` 필드만 참고.
 - 실패 시 `502` + `{ "error": "translation_failed" }` → FE는 원문을 그대로 보여주면 됨. **재시도 버튼을 붙일지는 아직 미확정** (아래 열린 질문 참고), 일단은 실패 즉시 원문 표시로 구현.
 
 ---

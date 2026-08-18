@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -11,9 +10,10 @@ from app.services.translation import LLMTranslationResult
 client = TestClient(app)
 
 
-def _request_body(document_id):
+def _request_body(document_id=42, block_id="block-1"):
     return {
-        "documentId": str(document_id),
+        "documentId": document_id,
+        "blockId": block_id,
         "content": "안녕하세요",
         "sourceLang": "ko",
         "targetLang": "en",
@@ -39,7 +39,7 @@ def test_returns_cached_translation_without_calling_llm(mock_get_cached):
     mock_get_cached.return_value = cached_row
 
     with patch("app.api.routes.translation.call_translation_llm") as mock_llm:
-        response = client.post("/api/ai/translations", json=_request_body(uuid4()))
+        response = client.post("/api/ai/translations", json=_request_body())
 
     assert response.status_code == 200
     body = response.json()
@@ -61,7 +61,7 @@ def test_cache_miss_calls_llm_and_saves(mock_get_cached, mock_llm, mock_save, mo
     mock_save.return_value = MagicMock(translated_content="Hello")
     mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
 
-    response = client.post("/api/ai/translations", json=_request_body(uuid4()))
+    response = client.post("/api/ai/translations", json=_request_body())
 
     assert response.status_code == 200
     body = response.json()
@@ -85,7 +85,7 @@ def test_cio_review_failure_does_not_break_response(mock_get_cached, mock_llm, m
     mock_save.return_value = MagicMock(translated_content="Hello")
     mock_cio.side_effect = RuntimeError("cio_review_failed")
 
-    response = client.post("/api/ai/translations", json=_request_body(uuid4()))
+    response = client.post("/api/ai/translations", json=_request_body())
 
     assert response.status_code == 200
     assert response.json()["translatedContent"] == "Hello"
@@ -99,7 +99,7 @@ def test_llm_failure_returns_502_without_retry(mock_get_cached, mock_llm):
     mock_get_cached.return_value = None
     mock_llm.side_effect = RuntimeError("translation_failed")
 
-    response = client.post("/api/ai/translations", json=_request_body(uuid4()))
+    response = client.post("/api/ai/translations", json=_request_body())
 
     assert response.status_code == 502
     assert response.json() == {"error": "translation_failed"}
@@ -110,7 +110,7 @@ def test_llm_failure_returns_502_without_retry(mock_get_cached, mock_llm):
 @patch("app.api.routes.translation.call_translation_llm")
 @patch("app.api.routes.translation.get_cached_translation")
 def test_save_failure_after_llm_success_returns_502(mock_get_cached, mock_llm, mock_save):
-    """동시 요청이 같은 (document_id, target_lang)로 캐시 미스 후 동시에 저장을 시도하면
+    """동시 요청이 같은 (document_id, block_id, target_lang)로 캐시 미스 후 동시에 저장을 시도하면
     UniqueConstraint 위반(IntegrityError)이 날 수 있다 — 그 경우도 500이 아니라 계약대로 502."""
     fake_db = MagicMock()
     _override_get_db(fake_db)
@@ -118,7 +118,7 @@ def test_save_failure_after_llm_success_returns_502(mock_get_cached, mock_llm, m
     mock_llm.return_value = LLMTranslationResult(translated_content="Hello", preserved_terms=[])
     mock_save.side_effect = Exception("duplicate key value violates unique constraint")
 
-    response = client.post("/api/ai/translations", json=_request_body(uuid4()))
+    response = client.post("/api/ai/translations", json=_request_body())
 
     assert response.status_code == 502
     assert response.json() == {"error": "translation_failed"}
