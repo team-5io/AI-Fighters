@@ -6,7 +6,7 @@ SuggestionType = Literal["structure", "next-paragraph", "clarity"]
 
 
 class SuggestionRequest(CamelModel):
-    document_id: str
+    document_id: int
     content: str
     cursor_context: str
 

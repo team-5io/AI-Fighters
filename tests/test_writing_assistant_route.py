@@ -11,7 +11,7 @@ client = TestClient(app)
 
 def _request_body():
     return {
-        "documentId": "doc-1",
+        "documentId": 100,
         "content": "본문 내용",
         "cursorContext": "커서 주변 문맥",
     }
