@@ -55,8 +55,19 @@ AI-Fighters에는 인증도 BE DB 접근도 없다(`docs/api_contract.md`). 따�
 BCP-47 소문자 코드: `"ko"`, `"en"`, `"ja"`.
 Translation 엔드포인트가 이미 `sourceLang: "ko"` / `targetLang: "en"`을 쓰고 있어 그와 통일한다.
 
-> **선행 확인 필요**: BE 프로필의 선호 언어 필드가 실제로 어떤 값을 담는지 확인해야 한다.
-> `KOREAN` 같은 enum이나 `한국어` 같은 표시 문자열이라면 BE 쪽에 코드 매핑이 필요하다.
+**(2026-08-21 확인 완료)** BE `UserEntity.language`는 `String`이고 Swagger 예시가 `"ko"`다.
+BCP-47 코드 규약이 맞으므로 **BE 쪽 코드 매핑은 불필요하다.**
+
+다만 확인 과정에서 세 가지 제약이 드러났다.
+
+| 발견 | 영향 |
+|---|---|
+| `@Column private String language` — **nullable** | 값이 없는 사용자가 존재한다 |
+| `SignupService`가 가입 시 `language`를 채우지 않는다 | **모든 신규 가입자가 `null`로 시작**한다 |
+| `UpdateProfileRequest.language`에 검증이 없다 (`@NotBlank`·`@Pattern`·enum 전부 없음) | `"KO"`, `"ko-KR"`, `"Korean"` 등 임의 문자열이 저장될 수 있다 |
+
+1번과 3번은 본 설계의 폴백 규칙(3.4)이 이미 흡수한다.
+2번은 제품 결정이 필요하며 12절 열린 질문으로 남긴다.
 
 ### 3.2 필드 위치
 
@@ -88,9 +99,10 @@ AI를 먼저 배포하고 BE가 나중에 붙는 롤아웃 순서에서, require
 
 | 입력 | 결과 | 이유 |
 |---|---|---|
-| 누락 / `null` | `ko` | 하위 호환 — BE 미배포 구간의 현행 동작 유지 |
+| 누락 / `null` / 공백 | `ko` | 하위 호환 — BE 미배포 구간의 현행 동작 유지 |
 | 지원 목록 내 (`ko`/`en`/`ja`) | 그대로 | — |
-| 지원 목록 밖 (`th` 등) | `en` + 경고 로그 | 한국어보다 범용적 (D4) |
+| 대소문자·지역코드 변형 (`KO`, `ko-KR`, `ko_KR`) | `ko` | BE에 검증이 없어 실제로 유입 가능 (3.1) |
+| 지원 목록 밖 (`th`, `Korean` 등) | `en` + 경고 로그 | 한국어보다 범용적 (D4) |
 
 ---
 
@@ -106,7 +118,13 @@ FALLBACK_LOCALE = "en"     # 지원하지 않는 값이 왔을 때
 _LANGUAGE_NAMES = {"ko": "Korean", "en": "English", "ja": "Japanese"}
 
 def normalize_locale(raw: str | None) -> str:
-    """요청에서 받은 locale을 지원 언어로 정규화한다."""
+    """요청에서 받은 locale을 지원 언어로 정규화한다.
+
+    BE가 값을 검증하지 않으므로(3.1) 다음 순서로 관대하게 처리한다.
+      1. None/공백  -> DEFAULT_LOCALE
+      2. 소문자화 후 지역 서브태그 제거 ("ko-KR", "ko_KR", "KO" -> "ko")
+      3. SUPPORTED_LOCALES에 있으면 그대로, 없으면 FALLBACK_LOCALE + 경고 로그
+    """
 
 def language_instruction(locale: str) -> str:
     """프롬프트에 붙일 출력 언어 지시문을 만든다."""
@@ -281,9 +299,13 @@ ALTER TABLE document_review ADD COLUMN IF NOT EXISTS source_locale VARCHAR(10) N
 
 별도 레포에서 수행한다.
 
-1. 사용자 프로필의 선호 언어 값을 조회해 AI 프록시 호출에 실어 보낸다 (POST 4곳, GET 2곳).
-2. 프로필 값이 BCP-47 코드가 아니면 `ko`/`en`/`ja`로 매핑한다.
+1. `UserEntity.language` 값을 조회해 AI 프록시 호출에 실어 보낸다 (POST 4곳, GET 2곳).
+   값이 `null`이면 필드를 생략하거나 `null`로 보내면 된다 — AI가 기본값으로 처리한다(3.4).
+2. 코드 매핑은 불필요하다 (3.1 확인 완료).
 3. `docs/api_contract.md`를 갱신한다.
+
+> 선택 사항: `UpdateProfileRequest.language`에 `@Pattern` 검증을 추가하면 이상값 유입을
+> 원천 차단할 수 있다. 본 설계는 검증이 없는 현재 상태를 전제로 동작하므로 필수는 아니다.
 
 ---
 
@@ -333,6 +355,10 @@ ALTER TABLE document_review ADD COLUMN IF NOT EXISTS source_locale VARCHAR(10) N
 
 ## 12. 열린 질문
 
-- BE 프로필 선호 언어 필드의 실제 값 포맷 (3.1 참고) — 확인 후 매핑 필요 여부 결정
+- **신규 가입자의 기본 언어를 무엇으로 할 것인가.** 현재 `SignupService`는 `language`를
+  채우지 않아 모든 신규 가입자가 `null`이고, 본 설계상 `null`은 한국어로 처리된다.
+  즉 **일본에서 막 가입한 사용자도 프로필을 직접 바꾸기 전까지는 한국어를 받는다.**
+  가입 시 `Accept-Language`로 초기값을 잡을지, 온보딩에서 언어를 묻을지, 아니면
+  현행(한국어 기본)을 유지할지는 제품 결정이라 팀 합의가 필요하다. BE 작업 범위다.
 - 규칙 목록이 매우 커질 경우 배치 번역 1회의 토큰 한도. 현재 팀당 규칙 수가 적어(기본 5개)
   문제되지 않으나, 규칙이 수십 개로 늘면 청크 분할이 필요하다.
