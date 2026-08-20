@@ -16,6 +16,7 @@ from app.schemas.charter import (
     RuleStatus,
     UpdateRuleRequest,
 )
+from app.services.ai_text_translation import TranslatableField, translate_fields
 from app.services.charter import (
     adopt_rules as adopt_rules_service,
     call_charter_llm,
@@ -30,8 +31,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/charter", tags=["charter"])
 
 
-def _to_out(rule: CharterRule) -> CharterRuleOut:
-    return CharterRuleOut(id=rule.id, status=rule.status, title=rule.title, description=rule.description)
+_TRANSLATABLE_RULE_FIELDS = ("title", "description")
+
+
+def _to_out(rule: CharterRule, translated: dict | None = None) -> CharterRuleOut:
+    translated = translated or {}
+    return CharterRuleOut(
+        id=rule.id,
+        status=rule.status,
+        title=translated.get((rule.id, "title"), rule.title),
+        description=translated.get((rule.id, "description"), rule.description),
+    )
 
 
 @router.post("/generate", response_model=GenerateCharterResponse)
@@ -39,8 +49,8 @@ def generate_charter(
     payload: GenerateCharterRequest, db: Session = Depends(get_db)
 ) -> GenerateCharterResponse | JSONResponse:
     try:
-        llm_rules = call_charter_llm()
-        rows = create_draft_rules(db, payload.team_id, llm_rules)
+        llm_rules = call_charter_llm(locale=payload.locale)
+        rows = create_draft_rules(db, payload.team_id, llm_rules, locale=payload.locale)
     except Exception:
         logger.exception("charter generation failed for team_id=%s", payload.team_id)
         return JSONResponse(status_code=502, content={"error": "charter_generation_failed"})
@@ -53,7 +63,7 @@ def update_rule(rule_id: UUID, payload: UpdateRuleRequest, db: Session = Depends
     rule = get_rule(db, rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="rule_not_found")
-    update_rule_service(db, rule, payload.title, payload.description)
+    update_rule_service(db, rule, payload.title, payload.description, locale=payload.locale)
 
 
 @router.post("/adopt", status_code=204)
@@ -65,7 +75,22 @@ def adopt_rules(payload: AdoptRulesRequest, db: Session = Depends(get_db)) -> No
 def list_rules(
     team_id: int = Query(..., alias="teamId"),
     status: RuleStatus | None = Query(None),
+    locale: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> CharterRulesResponse:
     rules = list_rules_service(db, team_id, status)
-    return CharterRulesResponse(rules=[_to_out(row) for row in rules])
+    # 저장된 규칙은 생성 시점 언어로 굳어 있다. 다국어 팀에서는 나중에 합류한
+    # 사용자도 기존 규칙을 읽어야 하므로 조회 시점에 번역한다.
+    fields = [
+        TranslatableField(
+            entity_type="charter_rule",
+            entity_id=row.id,
+            field=name,
+            source_locale=row.source_locale,
+            text=getattr(row, name),
+        )
+        for row in rules
+        for name in _TRANSLATABLE_RULE_FIELDS
+    ]
+    translated = translate_fields(db, fields, locale)
+    return CharterRulesResponse(rules=[_to_out(row, translated) for row in rules])
