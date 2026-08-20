@@ -64,6 +64,12 @@ jobs:
           script: |
             cd ${{ secrets.EC2_DEPLOY_PATH }}
             docker compose -f docker-compose.prod.yml pull
+
+            # DB를 먼저 띄우고, 새 이미지로 마이그레이션을 끝낸 다음 api를 올린다.
+            # 순서를 뒤집으면 새 코드가 낡은 스키마로 트래픽을 받는 구간이 생긴다.
+            docker compose -f docker-compose.prod.yml up -d db
+            docker compose -f docker-compose.prod.yml run --rm api python scripts/run_migrations.py
+
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
 

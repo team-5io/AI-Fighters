@@ -7,8 +7,37 @@
 
 1. `pytest` 통과 확인
 2. `{DOCKERHUB_USERNAME}/ai-fighters:main` 이미지 build & push
-3. EC2에 SSH 접속 → `docker compose -f docker-compose.prod.yml pull && up -d` → 재기동
+3. EC2에 SSH 접속 → `pull` → **DB 기동 → 마이그레이션 → api 기동**
 4. `/health` 헬스체크
+
+## 마이그레이션은 배포가 알아서 한다 (2026-08-21 추가)
+
+이 프로젝트에는 Alembic이 없다. `create_all`은 없는 테이블만 만들고 **기존 테이블에 컬럼을
+추가하지 않는다.** 예전에는 컬럼 추가 시 사람이 EC2에 붙어 SQL을 돌려야 했고, 실제로
+한 번 빠뜨려서 조회가 500 나는 일이 있었다.
+
+이제 `deploy` job이 컨테이너 안에서 `scripts/run_migrations.py`를 실행한다.
+
+- `scripts/migrations/*.sql`을 **파일명 순으로** 적용한다
+- 적용한 파일명을 `schema_migrations` 테이블에 기록해 **두 번 실행하지 않는다**
+- 파일 하나가 한 트랜잭션이다. 실패하면 롤백되고 기록도 남지 않아 다음 배포에서 다시 시도한다
+- DB 접속은 EC2 `.env`의 `DATABASE_URL`을 그대로 쓴다 — 접속 정보를 따로 관리하지 않는다
+
+**새 마이그레이션이 필요하면 `scripts/migrations/`에 SQL 파일을 추가해 머지하면 끝이다.**
+EC2에 접속할 일이 없다. 파일명은 날짜 접두사(`2026-08-21_...`)로 순서를 보장한다.
+
+### 순서가 중요하다
+
+`up -d db` → 마이그레이션 → `up -d` 순이다. `up -d`를 먼저 하면 새 api가 낡은 스키마로
+트래픽을 받는 구간이 생긴다.
+
+## `/health`는 DB 스키마까지 본다 (2026-08-21 변경)
+
+`deploy` job은 `curl -sf /health` 하나로 배포 성공을 판정한다. 예전 `/health`는 상수를
+돌려줘서 **마이그레이션을 빠뜨려도 배포가 success로 찍혔고 실제 엔드포인트만 500이었다.**
+
+이제 앱이 읽는 테이블을 한 건씩 실제로 조회한다. 컬럼이 없으면 `503`을 반환해 배포가
+실패로 판정된다. `SELECT 1`로는 컬럼 누락이 잡히지 않기 때문에 모델 조회로 검증한다.
 
 ## DB는 별도 RDS 없이 EC2 안에 번들로 띄운다
 
