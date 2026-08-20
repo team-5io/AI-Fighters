@@ -13,6 +13,7 @@ from app.services.ai_text_translation import TranslatableField, translate_fields
 from app.services.cio_orchestrator import review_ai_output
 from app.services.document_lion import (
     CharterRuleContext,
+    RelatedDocumentContext,
     call_document_lion_llm,
     create_review,
     fetch_adopted_charter_rules,
@@ -58,11 +59,32 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
         rule_contexts = [
             CharterRuleContext(id=rule.id, title=rule.title, description=rule.description) for rule in charter_rules
         ]
+        related_contexts = (
+            [
+                RelatedDocumentContext(
+                    id=doc.document_id,
+                    title=doc.title,
+                    content=doc.content,
+                    relation_type=doc.relation_type,
+                    direction=doc.direction,
+                )
+                for doc in payload.related_documents
+            ]
+            if payload.related_documents
+            else None
+        )
         llm_result = call_document_lion_llm(
-            payload.content, rule_contexts, locale=payload.locale, blocks=payload.blocks
+            payload.content,
+            rule_contexts,
+            locale=payload.locale,
+            blocks=payload.blocks,
+            related_documents=related_contexts,
         )
         # LLM이 만들어낸 존재하지 않는 blockId를 걸러내기 위해 실제로 전달한 집합을 넘긴다.
         valid_block_ids = {b.block_id for b in payload.blocks} if payload.blocks else None
+        valid_related_document_ids = (
+            {d.document_id for d in payload.related_documents} if payload.related_documents else None
+        )
         review, issues = create_review(
             db,
             payload.document_id,
@@ -71,6 +93,7 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
             payload.requested_by,
             llm_result.issues,
             valid_block_ids=valid_block_ids,
+            valid_related_document_ids=valid_related_document_ids,
             locale=payload.locale,
         )
     except Exception:

@@ -9,6 +9,22 @@ IssueType = Literal["conflict", "inconsistency", "charter_violation"]
 Verdict = Literal["approve", "reject_recommended"]
 
 
+class RelatedDocument(CamelModel):
+    """BE가 GET /documents/{documentId}/relations로 찾은 이웃 문서.
+
+    그 API 응답에는 본문이 없다(id·제목·관계유형·방향뿐). 검토를 하려면 본문이
+    필요하므로 BE가 이웃 문서 본문까지 조회해 실어 보낸다. AI가 BE를 직접 호출하지
+    않는 기존 구조(Charter 규칙·문서 본문과 동일)를 그대로 따른다.
+    """
+
+    document_id: int
+    title: str
+    content: str
+    relation_type: str
+    # 조회 기준 문서 대비 방향 (OUTGOING/INCOMING). BE가 이미 돌려주는 값이라 받아둔다.
+    direction: str | None = None
+
+
 class DocumentBlock(CamelModel):
     block_id: str
     content: str
@@ -38,6 +54,8 @@ class ReviewRequest(CamelModel):
     # 문서를 블록 단위로 받으면 이슈 위치를 blockId로 정확히 짚을 수 있다.
     # locale과 같은 이유로 optional이다 — BE 미배포 구간에서 422가 나면 안 된다.
     blocks: list[DocumentBlock] | None = None
+    # conflict/inconsistency 검토용. locale·blocks와 같은 이유로 optional이다.
+    related_documents: list[RelatedDocument] | None = None
 
 
 class ReviewIssue(CamelModel):
