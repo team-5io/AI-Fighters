@@ -159,40 +159,6 @@ def _review_body(**overrides):
 @patch("app.api.routes.document_lion.create_review")
 @patch("app.api.routes.document_lion.call_document_lion_llm")
 @patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
-def test_passes_locale_to_service(mock_rules, mock_llm, mock_create, mock_cio):
-    _override_get_db(MagicMock())
-    mock_rules.return_value = []
-    mock_llm.return_value = LLMReviewResult(issues=[])
-    mock_create.return_value = (_fake_review(), [])
-    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
-
-    response = client.post("/api/ai/document-lion/reviews", json=_review_body(locale="ja"))
-
-    assert response.status_code == 200
-    assert mock_llm.call_args.kwargs["locale"] == "ja"
-
-
-@patch("app.api.routes.document_lion.review_ai_output")
-@patch("app.api.routes.document_lion.create_review")
-@patch("app.api.routes.document_lion.call_document_lion_llm")
-@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
-def test_locale_is_optional(mock_rules, mock_llm, mock_create, mock_cio):
-    _override_get_db(MagicMock())
-    mock_rules.return_value = []
-    mock_llm.return_value = LLMReviewResult(issues=[])
-    mock_create.return_value = (_fake_review(), [])
-    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
-
-    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
-
-    assert response.status_code == 200
-    assert mock_llm.call_args.kwargs["locale"] is None
-
-
-@patch("app.api.routes.document_lion.review_ai_output")
-@patch("app.api.routes.document_lion.create_review")
-@patch("app.api.routes.document_lion.call_document_lion_llm")
-@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
 def test_passes_blocks_to_service(mock_rules, mock_llm, mock_create, mock_cio):
     _override_get_db(MagicMock())
     mock_rules.return_value = []
@@ -294,67 +260,39 @@ def test_hallucinated_block_id_is_dropped_end_to_end(mock_rules, mock_llm, mock_
 @patch("app.api.routes.document_lion.create_review")
 @patch("app.api.routes.document_lion.call_document_lion_llm")
 @patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
-def test_passes_locale_to_persistence(mock_rules, mock_llm, mock_create, mock_cio):
+def test_passes_related_documents_to_service(mock_rules, mock_llm, mock_create, mock_cio):
     _override_get_db(MagicMock())
     mock_rules.return_value = []
     mock_llm.return_value = LLMReviewResult(issues=[])
     mock_create.return_value = (_fake_review(), [])
     mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
 
-    client.post("/api/ai/document-lion/reviews", json=_review_body(locale="ja"))
-
-    assert mock_create.call_args.kwargs["locale"] == "ja"
-
-
-@patch("app.api.routes.document_lion.translate_fields")
-@patch("app.api.routes.document_lion.get_review")
-def test_get_review_translates_issue_descriptions(mock_get, mock_translate):
-    _override_get_db(MagicMock())
-    review = _fake_review()
-    review.source_locale = "ko"
-    issue = _fake_issue(description="리뷰 SLA 규칙 위반")
-    issue.id = uuid4()
-    mock_get.return_value = (review, [issue])
-    mock_translate.return_value = {(issue.id, "description"): "レビューSLA規則違反"}
-
-    response = client.get(f"/api/ai/document-lion/reviews/{review.id}?locale=ja")
+    related = [
+        {"documentId": 200, "title": "보안 정책", "content": "90일마다 교체", "relationType": "REFERENCE"}
+    ]
+    response = client.post(
+        "/api/ai/document-lion/reviews", json=_review_body(relatedDocuments=related)
+    )
 
     assert response.status_code == 200
-    assert response.json()["issues"][0]["description"] == "レビューSLA規則違反"
+    passed = mock_llm.call_args.kwargs["related_documents"]
+    assert [d.id for d in passed] == [200]
+    assert mock_create.call_args.kwargs["valid_related_document_ids"] == {200}
 
 
-@patch("app.api.routes.document_lion.translate_fields")
-@patch("app.api.routes.document_lion.get_review")
-def test_get_review_uses_parent_source_locale(mock_get, mock_translate):
-    """이슈의 원본 언어는 부모 리뷰의 source_locale을 따른다 — 칸이 부모에만 있다."""
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_related_documents_are_optional(mock_rules, mock_llm, mock_create, mock_cio):
     _override_get_db(MagicMock())
-    review = _fake_review()
-    review.source_locale = "en"
-    issue = _fake_issue(description="charter violation")
-    issue.id = uuid4()
-    mock_get.return_value = (review, [issue])
-    mock_translate.return_value = {}
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
 
-    client.get(f"/api/ai/document-lion/reviews/{review.id}?locale=ja")
-
-    fields = mock_translate.call_args.args[1]
-    assert [f.source_locale for f in fields] == ["en"]
-    assert [f.entity_type for f in fields] == ["document_review_issue"]
-    assert [f.field for f in fields] == ["description"]
-
-
-@patch("app.api.routes.document_lion.translate_fields")
-@patch("app.api.routes.document_lion.get_review")
-def test_get_review_locale_is_optional(mock_get, mock_translate):
-    _override_get_db(MagicMock())
-    review = _fake_review()
-    review.source_locale = "ko"
-    issue = _fake_issue(description="리뷰 SLA 규칙 위반")
-    issue.id = uuid4()
-    mock_get.return_value = (review, [issue])
-    mock_translate.return_value = {}
-
-    response = client.get(f"/api/ai/document-lion/reviews/{review.id}")
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
 
     assert response.status_code == 200
-    assert response.json()["issues"][0]["description"] == "리뷰 SLA 규칙 위반"
+    assert mock_llm.call_args.kwargs["related_documents"] is None
+    assert mock_create.call_args.kwargs["valid_related_document_ids"] is None

@@ -16,11 +16,6 @@ class Settings(BaseSettings):
     document_lion_model: str = ""
     cio_model: str = ""
 
-    # 배치 번역 청크 기준(문자 수). 개수 기준으로는 항목 길이 편차를 잡을 수 없다.
-    # 청크는 토큰 대책이기도 하지만 본질은 실패 격리다 — 개수 불일치로 한 청크가 실패해도
-    # 나머지 청크의 번역은 살아남는다.
-    translation_batch_chunk_chars: int = 4000
-
     @property
     def effective_document_lion_model(self) -> str:
         return self.document_lion_model or self.gemini_model
