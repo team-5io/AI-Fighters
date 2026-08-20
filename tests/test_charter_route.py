@@ -188,3 +188,74 @@ def test_update_rule_locale_is_optional(mock_get, mock_update):
 
     assert response.status_code == 204
     assert mock_update.call_args.kwargs["locale"] is None
+
+
+@patch("app.api.routes.charter.translate_fields")
+@patch("app.api.routes.charter.list_rules_service")
+def test_list_rules_translates_on_read(mock_list, mock_translate):
+    """저장된 규칙은 조회 시점에 요청 locale로 번역해 내려준다."""
+    _override_get_db(MagicMock())
+    rule = _fake_rule(title="리뷰 SLA", description="24시간 이내 리뷰")
+    rule.source_locale = "ko"
+    mock_list.return_value = [rule]
+    mock_translate.return_value = {
+        (rule.id, "title"): "レビューSLA",
+        (rule.id, "description"): "24時間以内",
+    }
+
+    response = client.get("/api/ai/charter/rules?teamId=1&locale=ja")
+
+    assert response.status_code == 200
+    body = response.json()["rules"][0]
+    assert body["title"] == "レビューSLA"
+    assert body["description"] == "24時間以内"
+
+
+@patch("app.api.routes.charter.translate_fields")
+@patch("app.api.routes.charter.list_rules_service")
+def test_list_rules_passes_source_locale_and_fields(mock_list, mock_translate):
+    _override_get_db(MagicMock())
+    rule = _fake_rule(title="리뷰 SLA", description="24시간 이내 리뷰")
+    rule.source_locale = "ko"
+    mock_list.return_value = [rule]
+    mock_translate.return_value = {}
+
+    client.get("/api/ai/charter/rules?teamId=1&locale=ja")
+
+    fields = mock_translate.call_args.args[1]
+    assert {f.field for f in fields} == {"title", "description"}
+    assert {f.entity_type for f in fields} == {"charter_rule"}
+    assert {f.source_locale for f in fields} == {"ko"}
+    assert mock_translate.call_args.args[2] == "ja"
+
+
+@patch("app.api.routes.charter.translate_fields")
+@patch("app.api.routes.charter.list_rules_service")
+def test_list_rules_locale_is_optional(mock_list, mock_translate):
+    """locale 쿼리 파라미터가 없어도 현행 동작이 유지된다."""
+    _override_get_db(MagicMock())
+    rule = _fake_rule(title="리뷰 SLA", description="24시간 이내 리뷰")
+    rule.source_locale = "ko"
+    mock_list.return_value = [rule]
+    mock_translate.return_value = {}
+
+    response = client.get("/api/ai/charter/rules?teamId=1")
+
+    assert response.status_code == 200
+    body = response.json()["rules"][0]
+    assert body["title"] == "리뷰 SLA"
+    assert body["description"] == "24시간 이내 리뷰"
+
+
+@patch("app.api.routes.charter.translate_fields")
+@patch("app.api.routes.charter.create_draft_rules")
+@patch("app.api.routes.charter.call_charter_llm")
+def test_generate_response_is_not_translated(mock_llm, mock_create, mock_translate):
+    """생성 응답은 이미 요청자의 언어다 — 번역이 필요한 것은 나중에 다른 언어로 조회할 때뿐이다."""
+    _override_get_db(MagicMock())
+    mock_llm.return_value = [LLMCharterRule(title="리뷰 SLA", description="24시간 이내 리뷰")]
+    mock_create.return_value = [_fake_rule()]
+
+    client.post("/api/ai/charter/generate", json={"teamId": 1, "locale": "ja"})
+
+    mock_translate.assert_not_called()
