@@ -120,16 +120,6 @@ class TestPendingFiles:
         assert pending_files(tmp_path / "nope", set()) == []
 
 
-class TestRealMigrationFile:
-    def test_shipped_migration_is_discovered(self):
-        """실제 배포되는 마이그레이션 파일이 러너에 잡히는지 — 경로가 어긋나면 조용히 0건이 된다."""
-        from scripts.run_migrations import MIGRATIONS_DIR
-
-        names = [p.name for p in pending_files(MIGRATIONS_DIR, set())]
-
-        assert "2026-08-21_add_source_locale.sql" in names
-
-
 class TestStatements:
     def test_splits_multiple_statements(self):
         from scripts.run_migrations import statements
@@ -148,15 +138,3 @@ class TestStatements:
         from scripts.run_migrations import statements
 
         assert statements("SELECT 1;\n\n;\n  \n") == ["SELECT 1"]
-
-
-class TestShippedMigrationRuns:
-    def test_shipped_file_splits_into_two_statements(self):
-        """실제 마이그레이션 파일은 ALTER 두 개다 — 한 문장으로 뭉치면 psycopg에서 깨질 수 있다."""
-        from scripts.run_migrations import MIGRATIONS_DIR, statements
-
-        sql = (MIGRATIONS_DIR / "2026-08-21_add_source_locale.sql").read_text()
-        parsed = statements(sql)
-
-        assert len(parsed) == 2
-        assert all(s.startswith("ALTER TABLE") for s in parsed)

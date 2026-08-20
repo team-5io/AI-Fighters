@@ -20,13 +20,3 @@ class TestPerServiceModelOverride:
         s = Settings()
         assert s.effective_document_lion_model == s.gemini_model
         assert s.effective_cio_model == s.gemini_model
-
-
-class TestTranslationChunkSetting:
-    """6번 결정 — 배치 번역 청크 기준 4,000자. 코드에 숫자를 박지 않는다."""
-
-    def test_default_chunk_size(self):
-        assert Settings().translation_batch_chunk_chars == 4000
-
-    def test_is_configurable(self):
-        assert Settings(translation_batch_chunk_chars=1500).translation_batch_chunk_chars == 1500

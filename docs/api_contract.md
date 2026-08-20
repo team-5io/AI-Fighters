@@ -16,20 +16,20 @@ FE는 AI-Fighters를 직접 호출하지 않는다 — Spring이 인증/인가�
   순수 내부 로직이라 요청/응답 스펙에는 영향 없고, 검토가 실패해도 원래 응답은 그대로 내려간다 — BE가
   신경 쓸 부분 없음.
 
-**출력 언어 (`locale`) — 2026-08-21 추가**: AI가 자연어를 생성하는 세 지점(Writing Assistant 제안,
-Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어로 출력한다. BE가 `UserEntity.language`
-값을 프록시 호출에 실어 보낸다 — AI-Fighters에는 인증도 BE DB 접근도 없어 다른 경로가 없다.
+**출력 언어 — AI는 항상 영어로 생성한다 (2026-08-21 확정)**
 
-- 값 포맷은 BCP-47 소문자 코드. 지원 언어는 `"ko"` / `"en"` / `"ja"`.
-- **`locale`은 전부 optional이다.** 누락·`null`·공백이면 `ko`로 동작한다. required로 잡으면 BE가 아직
-  값을 보내지 않는 구간의 모든 호출이 `422`가 되고, BE가 이를 `502`로 감싸 내려보내 화면에는
-  "AI 장애"로 보인다. **`language`가 `null`인 사용자는 필드를 생략하거나 `null`로 보내면 된다.**
-- 미지원 값(`"th"`, `"Korean"` 등)은 거부하지 않고 **영어로 폴백**한다. 대소문자·지역 서브태그 변형
-  (`"KO"`, `"ko-KR"`, `"ko_KR"`)은 `ko`로 정규화한다. BE 프로필 수정 API에 값 검증이 없어 실제로 유입될 수 있다.
-- 생성 계열(POST/PATCH)은 **요청 바디**로, 조회 계열(GET)은 **쿼리 파라미터**로 받는다.
-- 저장되는 텍스트(Charter 규칙, DocumentLion 이슈)는 생성 시점 언어를 함께 기록하고, 다른 언어로
-  조회될 때 **조회 시점에 번역**해 내려준다. 번역은 최초 조회 시 lazy로 수행되고 캐시되며,
-  실패하면 원문을 그대로 내려준다. BE·FE가 신경 쓸 부분은 없다.
+AI가 자연어를 생성하는 세 지점(Writing Assistant 제안, Charter 규칙 초안, DocumentLion 이슈 설명)은
+**언제나 영어로 출력한다.** 사용자 언어로의 번역은 **FE가 브라우저 온디바이스 번역으로 처리한다.**
+
+- **요청에 `locale` 같은 언어 필드가 없다.** BE는 사용자 언어를 AI로 보내지 않아도 된다.
+- 저장되는 텍스트(Charter 규칙, DocumentLion 이슈)도 영어로 저장된다. 서버는 번역하지 않는다.
+- 사용자가 언어를 설정하기 전에는 영어가 그대로 보인다. 의도된 동작이다.
+
+> Translation 엔드포인트(1절)는 **별개 기능이다.** 그건 사용자가 명시적으로 문서 블록을 번역하는
+> 기능이고 `sourceLang`/`targetLang`을 그대로 받는다. AI 생성 텍스트의 출력 언어와 무관하다.
+
+> 이전 판에는 `locale`을 받아 사용자 언어로 생성하고 조회 시 서버가 번역하는 설계가 적혀 있었다.
+> 온디바이스 번역으로 방향이 바뀌면서 전부 제거했다.
 
 ---
 
@@ -80,8 +80,7 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
 {
   "documentId": 42,
   "content": "string",
-  "cursorContext": "string",
-  "locale": "ja"              // (2026-08-21 추가) optional — 없으면 "ko"
+  "cursorContext": "string"
 }
 
 // Response 200
@@ -120,7 +119,6 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
   "triggerType": "manual",    // "manual" | "auto"
   "requestedBy": "uuid",      // auto 호출 시에도 필수 — BE가 Doc PR 제출자의 publicId(userId)를 채워서 보낸다
   "content": "string",        // (2026-08-17 추가) 문서 본문 — AI가 BE DB를 직접 조회하지 않으므로 필수
-  "locale": "ja",             // (2026-08-21 추가) optional — 없으면 "ko"
   "blocks": [                 // (2026-08-21 추가) optional — 주면 이슈 위치를 blockId로 정확히 짚는다
     { "blockId": "string", "content": "string" }
   ],
@@ -164,8 +162,9 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
   `blocks`를 생략하면 기존처럼 `content` 평문으로 검토하고 `blockId`는 `null`이 된다.
   `quote`는 문제 문장의 원문 발췌로, `blockId`만으로는 짚히지 않는 블록 안 위치를 좁혀준다.
   AI가 전달받은 집합에 없는 `blockId`를 만들어내면 버린다 — 없는 블록을 찾다 실패하는 것을 막는다.
-  `quote`는 **번역하지 않는다.** 원문 문서를 가리키는 포인터이므로, 설명이 일본어여도 `quote`는
-  원문 언어로 남는 것이 정상이다.
+  `quote`는 원문 문서에서 그대로 발췌한 문장이다. 이슈 `description`은 영어인데 `quote`는 문서
+  원문 언어로 남는다 — 원문을 가리키는 포인터이므로 정상이다. FE가 온디바이스 번역을 걸 때도
+  `quote`는 제외해야 한다. 번역하면 문서에서 그 문장을 찾을 수 없다.
 - **(2026-08-21 정정) `conflict`/`inconsistency`는 `relatedDocuments`를 받으면 검토한다.**
   이전 판에는 "BE의 `GET /documents/{id}/graph`가 없어서 항상 이슈 없음"이라고 적혀 있었다.
   **`/graph`는 존재하지 않는 이름이었다.** 실제 API는 `GET /documents/{documentId}/relations`이며
@@ -183,15 +182,14 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
   `documentId`는 BE `Document.id`(`Long`)다. AI가 만들어낸 존재하지 않는 id는 저장 단계에서
   버린다(`relatedDocumentId`가 `null`이 된다) — 없는 문서를 FE가 찾다 실패하는 것을 막는다.
 
-### `GET /api/ai/document-lion/reviews/{reviewId}?locale=ja`
+### `GET /api/ai/document-lion/reviews/{reviewId}`
 트리거: **FE** (리뷰 화면 재진입 시 결과 다시 조회) → BE 프록시
 
 ```json
 // Response 200 — 위 POST 응답과 동일 형태
 ```
 
-- **(2026-08-21 추가)** `locale`은 optional. 리뷰가 저장된 언어와 다르면 이슈 `description`을
-  요청 언어로 번역해 내려준다. `locationRef.quote`는 원문 그대로 유지한다.
+- 저장된 그대로 내려준다. 이슈 `description`은 영어다. 번역은 FE 담당.
 
 ---
 
@@ -202,7 +200,7 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
 ### `POST /api/ai/charter/generate`
 트리거: **FE** (팀 생성 초기 1회) → BE 프록시
 ```json
-// Request  { "teamId": 1, "locale": "ja" }   // locale은 optional — 없으면 "ko"
+// Request  { "teamId": 1 }
 // Response { "rules": [{ "id": "uuid", "status": "draft", "title": "string", "description": "string" }] }
 ```
 - **(2026-08-19 수정)** `teamId`는 BE `Team.id`(`Long`) — 예전엔 `uuid`로 잘못 잡혀있었음. 규칙 `id`는 AI-Fighters 자체 PK라 그대로 `uuid`.
@@ -210,10 +208,8 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
 ### `PATCH /api/ai/charter/rules/{ruleId}`
 트리거: **FE** — 규칙 하나 수정 → BE 프록시
 ```json
-// Request { "title": "string", "description": "string", "locale": "ja" }
+// Request { "title": "string", "description": "string" }
 ```
-- **(2026-08-21 추가)** `locale`은 optional. 주면 그 규칙의 원본 언어를 갱신한다 — 일본 사용자가
-  한국어 규칙을 일본어로 고쳐 쓸 수 있다. 생략하면 기존 원본 언어를 그대로 둔다.
 
 ### `POST /api/ai/charter/adopt`
 트리거: **FE** — 지정한 규칙들을 공식 규칙으로 일괄 채택 (이후 DocumentLion 검토 기준으로 사용) → BE 프록시
@@ -221,11 +217,10 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
 // Request { "teamId": 1, "ruleIds": ["uuid"], "adoptedBy": "uuid" }
 ```
 
-### `GET /api/ai/charter/rules?teamId=1&locale=ja`
+### `GET /api/ai/charter/rules?teamId=1`
 트리거: **FE** — 현재 팀의 규칙 목록 조회 (draft·adopted·archived 전체, `status`로 필터 가능) → BE 프록시
 
-- **(2026-08-21 추가)** `locale`은 optional. 규칙이 저장된 언어와 다르면 `title`·`description`을
-  요청 언어로 번역해 내려준다. 나중에 합류한 다른 언어 사용자도 기존 규칙을 읽을 수 있어야 한다.
+- 저장된 그대로 내려준다. `title`·`description`은 영어다. 번역은 FE 담당.
 
 ---
 
@@ -236,8 +231,9 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
 
 ### 확정된 항목 (2026-08-21)
 
-- **AI 출력 지원 언어**: `ko` / `en` / `ja`. 미지원 값은 영어 폴백. 확대는 AI 쪽 지원 목록에 추가하면 된다.
+- **AI 출력 언어**: **항상 영어.** 사용자 언어 번역은 FE 온디바이스가 담당한다. 서버에 `locale` 없음.
 - **Writing Assistant 유형별 묶음**: 묶지 않는다. 평평한 리스트 + 서버 정렬로 해결 (2절 참고).
 - **DocumentLion `locationRef` 포맷**: `{"blockId", "quote"}` 객체 (3절 참고).
-- **신규 가입자 기본 언어**: 가입 시 `Accept-Language`로 `ko`/`en`/`ja` 매칭, 해석 불가·헤더 없음이면 `en`.
-  BE `SignupService` 작업 범위다 — AI는 어느 쪽이든 동일하게 동작한다.
+  `quote`는 FE 번역 대상에서 제외할 것.
+- **신규 사용자가 보는 언어**: 영어. 별도 기본값 설정이 필요 없어졌다 — BE `SignupService`에
+  `Accept-Language` 처리를 넣기로 했던 계획도 함께 폐기한다.

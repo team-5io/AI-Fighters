@@ -57,33 +57,11 @@ def _mock_empty(mock_get_client):
     mock_get_client.return_value = mock_client
     return mock_client
 
-
 @patch("app.services.charter.get_genai_client")
-def test_prompt_defaults_to_korean_when_locale_missing(mock_get_client):
+def test_prompt_requires_english_output(mock_get_client):
     mock_client = _mock_empty(mock_get_client)
 
     call_charter_llm()
 
     prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
-    assert "Korean" in prompt
-
-
-@patch("app.services.charter.get_genai_client")
-def test_prompt_uses_requested_locale(mock_get_client):
-    mock_client = _mock_empty(mock_get_client)
-
-    call_charter_llm(locale="ja")
-
-    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
-    assert "Japanese" in prompt
-    assert "Korean" not in prompt
-
-
-@patch("app.services.charter.get_genai_client")
-def test_prompt_falls_back_to_english_for_unsupported_locale(mock_get_client):
-    mock_client = _mock_empty(mock_get_client)
-
-    call_charter_llm(locale="th")
-
-    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
-    assert "English" in prompt
+    assert "in English" in prompt

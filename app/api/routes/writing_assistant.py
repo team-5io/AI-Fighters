@@ -15,9 +15,7 @@ router = APIRouter(prefix="/writing-assistant", tags=["writing-assistant"])
 @router.post("/suggestions", response_model=SuggestionResponse)
 def get_suggestions(payload: SuggestionRequest) -> SuggestionResponse | JSONResponse:
     try:
-        suggestions = call_writing_assistant_llm(
-            payload.content, payload.cursor_context, locale=payload.locale
-        )
+        suggestions = call_writing_assistant_llm(payload.content, payload.cursor_context)
     except Exception:
         logger.exception("writing assistant suggestion generation failed for document_id=%s", payload.document_id)
         return JSONResponse(status_code=502, content={"error": "writing_assistant_failed"})

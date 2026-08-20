@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.locale import language_instruction, normalize_locale
+from app.core.output_language import OUTPUT_LANGUAGE_INSTRUCTION
 from app.models.charter_rule import CharterRule
 from app.models.document_review import DocumentReview
 from app.models.document_review_issue import DocumentReviewIssue
@@ -101,7 +101,6 @@ def parse_location_ref(raw: str | None) -> dict[str, str] | None:
 def call_document_lion_llm(
     content: str,
     charter_rules: list[CharterRuleContext],
-    locale: str | None = None,
     blocks: list[DocumentBlock] | None = None,
     related_documents: list[RelatedDocumentContext] | None = None,
 ) -> LLMReviewResult:
@@ -137,7 +136,7 @@ def call_document_lion_llm(
         "문제가 없으면 issues를 빈 배열로 반환해라.\n"
         f"{location_instruction}"
         "\n"
-        f"{language_instruction(locale)}\n\n"
+        f"{OUTPUT_LANGUAGE_INSTRUCTION}\n\n"
         f"협업 규칙:\n{rules_text}\n\n"
         f"연관 문서:\n{related_text}\n\n"
         f"문서 내용:\n{document_text}"
@@ -176,7 +175,6 @@ def create_review(
     llm_issues: list[LLMReviewIssue],
     valid_block_ids: set[str] | None = None,
     valid_related_document_ids: set[int] | None = None,
-    locale: str | None = None,
 ) -> tuple[DocumentReview, list[DocumentReviewIssue]]:
     overall_verdict = "reject_recommended" if any(issue.severity == "critical" for issue in llm_issues) else "approve"
     review = DocumentReview(
@@ -185,9 +183,6 @@ def create_review(
         trigger_type=trigger_type,
         overall_verdict=overall_verdict,
         requested_by_ref=requested_by,
-        # 한 리뷰의 이슈들은 단일 LLM 호출로 생성되므로 언어가 항상 같다.
-        # 그래서 칸을 자식(issue)이 아니라 부모(review)에만 둔다.
-        source_locale=normalize_locale(locale),
     )
     db.add(review)
     db.flush()

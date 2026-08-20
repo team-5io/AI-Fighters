@@ -48,13 +48,11 @@ class ReviewRequest(CamelModel):
     trigger_type: TriggerType
     requested_by: UUID  # auto 호출(BE) 시에도 필수 — Doc PR 제출자의 userId (publicId)
     content: str  # 문서 본문 — 기존 api_contract.md에 없던 필드, AI가 BE DB를 직접 조회하지 않으므로 필수
-    # BE 사용자 프로필의 선호 언어. optional이다 — required로 잡으면 BE가 아직 locale을
-    # 실어보내지 않는 구간의 모든 호출이 422가 되고, BE가 이를 502로 감싸 내려보낸다.
-    locale: str | None = None
     # 문서를 블록 단위로 받으면 이슈 위치를 blockId로 정확히 짚을 수 있다.
-    # locale과 같은 이유로 optional이다 — BE 미배포 구간에서 422가 나면 안 된다.
+    # optional이다 — required로 잡으면 BE 미배포 구간의 모든 호출이 422가 되고,
+    # BE가 이를 502로 감싸 내려보내 화면에는 "AI 장애"로 보인다.
     blocks: list[DocumentBlock] | None = None
-    # conflict/inconsistency 검토용. locale·blocks와 같은 이유로 optional이다.
+    # conflict/inconsistency 검토용. blocks와 같은 이유로 optional이다.
     related_documents: list[RelatedDocument] | None = None
 
 

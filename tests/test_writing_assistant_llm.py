@@ -79,44 +79,6 @@ def _mock_empty(mock_get_client):
 
 
 @patch("app.services.writing_assistant.get_genai_client")
-def test_prompt_defaults_to_korean_when_locale_missing(mock_get_client):
-    """locale 미전달 시 기본값은 한국어.
-
-    PR #24 이전에는 프롬프트에 출력 언어 지시가 아예 없어 영어로 응답했다. locale을
-    도입한 뒤에도 '지시가 존재하고, 미전달 시 한국어'라는 성질은 유지되어야 한다.
-    BE가 locale을 실어보내기 전 구간의 현행 동작이 이것이다.
-    """
-    mock_client = _mock_empty(mock_get_client)
-
-    call_writing_assistant_llm("본문 내용", "커서 주변 문맥")
-
-    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
-    assert "Korean" in prompt
-
-
-@patch("app.services.writing_assistant.get_genai_client")
-def test_prompt_uses_requested_locale(mock_get_client):
-    mock_client = _mock_empty(mock_get_client)
-
-    call_writing_assistant_llm("본문 내용", "커서 주변 문맥", locale="ja")
-
-    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
-    assert "Japanese" in prompt
-    assert "Korean" not in prompt
-
-
-@patch("app.services.writing_assistant.get_genai_client")
-def test_prompt_falls_back_to_english_for_unsupported_locale(mock_get_client):
-    """미지원 locale은 422가 아니라 영어 폴백 — AI의 422는 BE에서 502로 보인다."""
-    mock_client = _mock_empty(mock_get_client)
-
-    call_writing_assistant_llm("본문 내용", "커서 주변 문맥", locale="th")
-
-    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
-    assert "English" in prompt
-
-
-@patch("app.services.writing_assistant.get_genai_client")
 def test_suggestions_sorted_by_type(mock_get_client):
     """structure -> next-paragraph -> clarity 순으로 정렬한다 (큰 단위에서 작은 단위로).
 
@@ -161,3 +123,19 @@ def test_sorting_happens_after_truncation(mock_get_client):
 
     # structure("3")는 잘려나갔으므로 등장하지 않는다. 같은 유형 안에서는 원래 순서 유지.
     assert [s.text for s in result] == ["1", "2"]
+
+
+@patch("app.services.writing_assistant.get_genai_client")
+def test_prompt_requires_english_output(mock_get_client):
+    """AI는 항상 영어로 생성한다. 사용자 언어 번역은 FE 온디바이스가 담당한다.
+
+    출력 언어 지시가 아예 없으면 Gemini가 프롬프트 언어를 따라간다 — PR #24에서 실제로
+    영어 프롬프트 탓에 영어가 나왔고, 이 프롬프트는 한국어 설명이 섞여 있어 지시가 빠지면
+    한국어로 새어나갈 수 있다.
+    """
+    mock_client = _mock_empty(mock_get_client)
+
+    call_writing_assistant_llm("본문 내용", "커서 주변 문맥")
+
+    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+    assert "in English" in prompt
