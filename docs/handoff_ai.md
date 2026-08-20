@@ -309,9 +309,33 @@ AI는 전부 배포 가능한 상태다. 아래 작업은 **순서에 상관없�
 `blockId`와 같은 값**이므로 새로 만들 데이터가 아니다. 생략하면 기존처럼 `content` 평문으로
 검토하고 `locationRef.blockId`가 `null`이 된다.
 
-**(4) `GET /documents/{id}/graph` 일정을 공유해 달라.**
-이 API가 없어서 DocumentLion의 `conflict`/`inconsistency` 검토가 **항상 이슈 없음으로 나온다**
-(`fetch_related_documents()`가 빈 배열을 반환). `charter_violation`만 실제로 동작하는 상태다.
+**(4) DocumentLion 호출에 `relatedDocuments`를 실어 보낸다.**
+
+**(2026-08-21 정정)** 이전 판에는 "`GET /documents/{id}/graph`가 없어서 검토가 안 된다"고
+적혀 있었다. **`/graph`는 존재하지 않는 이름이었다.** 실제 API는
+`GET /documents/{documentId}/relations`이고 BE `72efa68`(2026-08-17)로 이미 들어가 있다.
+BE 인수인계서(`handoff_be_ai_integration.md`)에도 같은 오기가 있다 — 그쪽도 고쳐야 한다.
+
+없는 이름을 찾고 있었던 탓에 `conflict`/`inconsistency`가 실재하지 않는 블로커로 오래 막혀
+있었다. AI 쪽 구현은 끝냈다.
+
+BE가 할 일은 두 단계다.
+
+1. `GET /documents/{documentId}/relations`로 이웃 문서를 찾는다
+2. **이웃 문서 본문까지 조회해서** `relatedDocuments`로 실어 보낸다
+
+2단계가 필요한 이유: `/relations` 응답에 본문이 없다. `relationId`, `direction`,
+`relationType`, `neighborDocumentId`, `neighborTitle`, `createdAt`뿐이다. 그 응답을 그대로
+프록시하면 AI가 검토할 내용이 없다.
+
+```json
+"relatedDocuments": [
+  { "documentId": 200, "title": "...", "content": "...", "relationType": "REFERENCE", "direction": "OUTGOING" }
+]
+```
+
+optional이다. 생략하면 `charter_violation`만 검사하는 기존 동작이 유지된다.
+`direction`도 optional이지만 BE가 이미 돌려주는 값이라 같이 보내면 판정 품질에 도움이 된다.
 
 ## 7.2 BE — `Language` enum 전환 (결정 2번)
 
@@ -453,8 +477,8 @@ AI 스키마가 미지의 필드를 무시하므로(`CamelModel`에 `extra="forb
 
 v1.0.0에서 넘어온 것 중 아직 유효한 항목.
 
-- **DocumentLion `conflict`/`inconsistency` 미구현** — BE의 `GET /documents/{id}/graph`가
-  아직 없어 항상 이슈 없음으로 나온다. API 준비되면 연동 (7.1절에 요청 포함)
+- **DocumentLion `conflict`/`inconsistency`** — **AI 구현 완료.** BE가 `relatedDocuments`를
+  실어 보내면 동작한다 (7.1절 (4)). 이전 판의 "`/graph`가 없어서 미구현"은 오기였다
 - **Writing Assistant 제안 개수 제한 미확정** — 현재 기본 3개(`writing_assistant_suggestion_count`)
 - **번역 실패 시 재시도 버튼 여부 미확정** — 현재는 즉시 원문 표시
 - **Alembic 도입** — 설계 7절에서 별도 과제로 밀어둠. 스키마 변경이 반복되면 필요

@@ -20,11 +20,21 @@ class CharterRuleContext(BaseModel):
     description: str
 
 
+class RelatedDocumentContext(BaseModel):
+    id: int
+    title: str
+    content: str
+    relation_type: str
+    direction: str | None = None
+
+
 class LLMReviewIssue(BaseModel):
     severity: str
     issue_type: str
     description: str
     charter_rule_id: UUID | None = None
+    # BE Document.id는 Long이다 — publicId 발급 대상이 아니다.
+    related_document_id: int | None = None
     # 위치는 blockId + 원문 인용으로 받는다. LLM에게 JSON 문자열을 만들게 하는 대신
     # 구조화된 필드로 받고 저장 직전에 우리가 직렬화한다.
     block_id: str | None = None
@@ -41,13 +51,6 @@ def fetch_adopted_charter_rules(db: Session, team_id: int) -> list[CharterRule]:
         .filter(CharterRule.team_ref == team_id, CharterRule.status == "adopted")
         .all()
     )
-
-
-def fetch_related_documents(document_id: int) -> list[dict]:
-    # TODO: BE Document Graph 조회 API(GET /documents/{id}/graph)가 아직 시작 전 상태라
-    # 연관 문서를 가져올 방법이 없다. API 준비되면 실제 연동으로 교체한다.
-    # 그 전까지는 conflict/inconsistency 검토가 항상 이슈 없음으로 나온다.
-    return []
 
 
 def build_location_ref(issue: LLMReviewIssue, valid_block_ids: set[str] | None) -> str | None:
@@ -100,8 +103,16 @@ def call_document_lion_llm(
     charter_rules: list[CharterRuleContext],
     locale: str | None = None,
     blocks: list[DocumentBlock] | None = None,
+    related_documents: list[RelatedDocumentContext] | None = None,
 ) -> LLMReviewResult:
     rules_text = "\n".join(f"- ({r.id}) {r.title}: {r.description}" for r in charter_rules) or "(채택된 협업 규칙 없음)"
+    related_text = (
+        "\n".join(
+            f"- ({d.id}, {d.relation_type}{', ' + d.direction if d.direction else ''}) {d.title}:\n{d.content}"
+            for d in related_documents or []
+        )
+        or "(연관 문서 없음)"
+    )
 
     if blocks:
         # 협업 규칙 UUID를 되돌려받는 것과 같은 기법 — 식별자를 프롬프트에 노출하고 그대로 인용하게 한다.
@@ -120,11 +131,15 @@ def call_document_lion_llm(
         "아래 팀 협업 규칙(Charter)을 위반하는 내용이 있으면 issue_type을 'charter_violation'으로, "
         "심각도(severity: 'critical'/'medium'/'minor')와 함께 보고해라. "
         "위반한 규칙이 명확하면 charter_rule_id에 해당 규칙의 괄호 안 UUID를 그대로 넣어라. "
+        "아래 연관 문서와 사실이 어긋나면 issue_type을 'inconsistency'로, 같은 대상을 다르게 "
+        "정의하는 등 직접 충돌하면 'conflict'로 보고하고, related_document_id에 해당 연관 문서의 "
+        "괄호 안 숫자 id를 그대로 넣어라. 연관 문서에 없는 id를 새로 만들지 마라.\n"
         "문제가 없으면 issues를 빈 배열로 반환해라.\n"
         f"{location_instruction}"
         "\n"
         f"{language_instruction(locale)}\n\n"
         f"협업 규칙:\n{rules_text}\n\n"
+        f"연관 문서:\n{related_text}\n\n"
         f"문서 내용:\n{document_text}"
     )
     response = get_genai_client().models.generate_content(
@@ -141,6 +156,17 @@ def call_document_lion_llm(
     return result
 
 
+def _valid_related_document_id(issue: LLMReviewIssue, valid_ids: set[int] | None) -> int | None:
+    """LLM이 만들어낸 존재하지 않는 문서 id를 버린다.
+
+    blockId와 같은 방어다. 검증 없이 저장하면 FE가 없는 문서를 찾다 조용히 실패한다.
+    연관 문서를 안 받았으면 검증할 수 없으므로 그때도 버린다.
+    """
+    if issue.related_document_id is None or not valid_ids:
+        return None
+    return issue.related_document_id if issue.related_document_id in valid_ids else None
+
+
 def create_review(
     db: Session,
     document_id: int,
@@ -149,6 +175,7 @@ def create_review(
     requested_by: UUID,
     llm_issues: list[LLMReviewIssue],
     valid_block_ids: set[str] | None = None,
+    valid_related_document_ids: set[int] | None = None,
     locale: str | None = None,
 ) -> tuple[DocumentReview, list[DocumentReviewIssue]]:
     overall_verdict = "reject_recommended" if any(issue.severity == "critical" for issue in llm_issues) else "approve"
@@ -172,6 +199,7 @@ def create_review(
             issue_type=issue.issue_type,
             description=issue.description,
             charter_rule_id=issue.charter_rule_id,
+            related_document_ref=_valid_related_document_id(issue, valid_related_document_ids),
             location_ref=build_location_ref(issue, valid_block_ids),
         )
         for issue in llm_issues

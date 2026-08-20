@@ -358,3 +358,45 @@ def test_get_review_locale_is_optional(mock_get, mock_translate):
 
     assert response.status_code == 200
     assert response.json()["issues"][0]["description"] == "리뷰 SLA 규칙 위반"
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_passes_related_documents_to_service(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    related = [
+        {"documentId": 200, "title": "보안 정책", "content": "90일마다 교체", "relationType": "REFERENCE"}
+    ]
+    response = client.post(
+        "/api/ai/document-lion/reviews", json=_review_body(relatedDocuments=related)
+    )
+
+    assert response.status_code == 200
+    passed = mock_llm.call_args.kwargs["related_documents"]
+    assert [d.id for d in passed] == [200]
+    assert mock_create.call_args.kwargs["valid_related_document_ids"] == {200}
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_related_documents_are_optional(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
+
+    assert response.status_code == 200
+    assert mock_llm.call_args.kwargs["related_documents"] is None
+    assert mock_create.call_args.kwargs["valid_related_document_ids"] is None

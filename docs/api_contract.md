@@ -123,6 +123,15 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
   "locale": "ja",             // (2026-08-21 추가) optional — 없으면 "ko"
   "blocks": [                 // (2026-08-21 추가) optional — 주면 이슈 위치를 blockId로 정확히 짚는다
     { "blockId": "string", "content": "string" }
+  ],
+  "relatedDocuments": [       // (2026-08-21 추가) optional — conflict/inconsistency 검토용
+    {
+      "documentId": 200,
+      "title": "string",
+      "content": "string",
+      "relationType": "REFERENCE",
+      "direction": "OUTGOING"   // optional
+    }
   ]
 }
 
@@ -157,7 +166,22 @@ Charter 규칙 초안, DocumentLion 이슈 설명)은 사용자의 선호 언어
   AI가 전달받은 집합에 없는 `blockId`를 만들어내면 버린다 — 없는 블록을 찾다 실패하는 것을 막는다.
   `quote`는 **번역하지 않는다.** 원문 문서를 가리키는 포인터이므로, 설명이 일본어여도 `quote`는
   원문 언어로 남는 것이 정상이다.
-- **(2026-08-17 기준 제약)** `issueType: "charter_violation"`만 실제로 검사한다. `"conflict"`/`"inconsistency"`는 BE의 문서 관계 그래프 조회 API(`GET /documents/{id}/graph`)가 아직 없어서 항상 이슈 없음으로 나온다 — 그 API 준비되면 연동 예정.
+- **(2026-08-21 정정) `conflict`/`inconsistency`는 `relatedDocuments`를 받으면 검토한다.**
+  이전 판에는 "BE의 `GET /documents/{id}/graph`가 없어서 항상 이슈 없음"이라고 적혀 있었다.
+  **`/graph`는 존재하지 않는 이름이었다.** 실제 API는 `GET /documents/{documentId}/relations`이며
+  BE `72efa68`(2026-08-17)로 이미 들어가 있다. 없는 이름을 찾고 있어서 생긴 오기였다.
+
+  다만 `/relations` 응답에는 **이웃 문서 본문이 없다** — `relationId`, `direction`, `relationType`,
+  `neighborDocumentId`, `neighborTitle`, `createdAt`뿐이다. 그래서 그 응답만 프록시해서는 검토가
+  불가능하다. **BE가 이웃 문서 본문까지 조회해 `relatedDocuments`로 실어 보내야 한다.**
+  Charter 규칙·문서 본문을 BE가 실어 보내는 기존 패턴과 동일하며, AI가 BE를 직접 호출하지 않으므로
+  서비스 토큰 체계를 새로 만들 필요가 없다.
+
+  `relatedDocuments`를 생략하면 `conflict`/`inconsistency`는 이슈 없음으로 나오고
+  `charter_violation`만 검사한다 — 기존 동작과 같다.
+
+  `documentId`는 BE `Document.id`(`Long`)다. AI가 만들어낸 존재하지 않는 id는 저장 단계에서
+  버린다(`relatedDocumentId`가 `null`이 된다) — 없는 문서를 FE가 찾다 실패하는 것을 막는다.
 
 ### `GET /api/ai/document-lion/reviews/{reviewId}?locale=ja`
 트리거: **FE** (리뷰 화면 재진입 시 결과 다시 조회) → BE 프록시
