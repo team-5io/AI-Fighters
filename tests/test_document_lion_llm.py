@@ -123,3 +123,48 @@ def test_falls_back_to_shared_model_when_override_unset(mock_get_client, monkeyp
     call_document_lion_llm("본문 내용", [])
 
     assert mock_client.models.generate_content.call_args.kwargs["model"] == "gemini-flash-lite-latest"
+
+
+@patch("app.services.document_lion.get_genai_client")
+def test_prompt_renders_blocks_with_ids(mock_get_client):
+    """블록을 [blockId] 형태로 렌더링해 LLM이 그 id를 되돌려줄 수 있게 한다.
+
+    이 기법은 이 레포에서 이미 검증됐다 — 협업 규칙을 '- (UUID) 제목' 으로 넣고
+    LLM이 그 UUID를 charter_rule_id에 되돌려주는 구조가 동작 중이다.
+    """
+    from app.schemas.document_lion import DocumentBlock
+
+    mock_client = _mock_empty(mock_get_client)
+
+    call_document_lion_llm(
+        "문서 본문",
+        [],
+        blocks=[DocumentBlock(block_id="b-1", content="첫 문단"), DocumentBlock(block_id="b-2", content="둘째 문단")],
+    )
+
+    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+    assert "[b-1] 첫 문단" in prompt
+    assert "[b-2] 둘째 문단" in prompt
+    assert "block_id" in prompt
+
+
+@patch("app.services.document_lion.get_genai_client")
+def test_prompt_falls_back_to_flat_content_without_blocks(mock_get_client):
+    """blocks는 optional이다 — BE가 아직 안 보내는 구간에서도 현행 동작이 유지된다."""
+    mock_client = _mock_empty(mock_get_client)
+
+    call_document_lion_llm("문서 본문 전체", [])
+
+    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+    assert "문서 본문 전체" in prompt
+    assert "[b-" not in prompt
+
+
+@patch("app.services.document_lion.get_genai_client")
+def test_empty_block_list_is_treated_as_absent(mock_get_client):
+    mock_client = _mock_empty(mock_get_client)
+
+    call_document_lion_llm("문서 본문 전체", [], blocks=[])
+
+    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+    assert "문서 본문 전체" in prompt

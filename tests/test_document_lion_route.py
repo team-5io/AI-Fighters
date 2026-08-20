@@ -187,3 +187,104 @@ def test_locale_is_optional(mock_rules, mock_llm, mock_create, mock_cio):
 
     assert response.status_code == 200
     assert mock_llm.call_args.kwargs["locale"] is None
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_passes_blocks_to_service(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    blocks = [{"blockId": "b-1", "content": "첫 문단"}]
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body(blocks=blocks))
+
+    assert response.status_code == 200
+    passed = mock_llm.call_args.kwargs["blocks"]
+    assert [b.block_id for b in passed] == ["b-1"]
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_blocks_are_optional(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
+
+    assert response.status_code == 200
+    assert mock_llm.call_args.kwargs["blocks"] is None
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_response_exposes_location_ref_as_object(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    stored = '{"blockId": "b-1", "quote": "문제 문장"}'
+    mock_create.return_value = (_fake_review(), [_fake_issue(location_ref=stored)])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
+
+    assert response.status_code == 200
+    assert response.json()["issues"][0]["locationRef"] == {"blockId": "b-1", "quote": "문제 문장"}
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_legacy_plain_text_location_ref_survives(mock_rules, mock_llm, mock_create, mock_cio):
+    """포맷 확정 전에 저장된 행도 응답에서 깨지지 않아야 한다."""
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [_fake_issue(location_ref="3번째 문단")])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
+
+    assert response.status_code == 200
+    assert response.json()["issues"][0]["locationRef"] == {"blockId": None, "quote": "3번째 문단"}
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_hallucinated_block_id_is_dropped_end_to_end(mock_rules, mock_llm, mock_cio):
+    """LLM이 없는 blockId를 내놔도 저장·응답에 실리지 않아야 한다."""
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(
+        issues=[
+            LLMReviewIssue(
+                severity="minor",
+                issue_type="charter_violation",
+                description="위반",
+                block_id="b-존재하지-않음",
+                quote="문제 문장",
+            )
+        ]
+    )
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    with patch("app.api.routes.document_lion.create_review") as mock_create:
+        mock_create.return_value = (_fake_review(), [])
+        client.post(
+            "/api/ai/document-lion/reviews",
+            json=_review_body(blocks=[{"blockId": "b-1", "content": "첫 문단"}]),
+        )
+        assert mock_create.call_args.kwargs["valid_block_ids"] == {"b-1"}

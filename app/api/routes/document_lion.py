@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.document_review import DocumentReview
 from app.models.document_review_issue import DocumentReviewIssue
-from app.schemas.document_lion import ReviewIssue, ReviewRequest, ReviewResponse
+from app.schemas.document_lion import LocationRef, ReviewIssue, ReviewRequest, ReviewResponse
 from app.services.cio_orchestrator import review_ai_output
 from app.services.document_lion import (
     CharterRuleContext,
@@ -16,11 +16,17 @@ from app.services.document_lion import (
     create_review,
     fetch_adopted_charter_rules,
     get_review,
+    parse_location_ref,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/document-lion", tags=["document-lion"])
+
+
+def _to_location_ref(raw: str | None) -> LocationRef | None:
+    parsed = parse_location_ref(raw)
+    return LocationRef.model_validate(parsed) if parsed else None
 
 
 def _to_response(review: DocumentReview, issues: list[DocumentReviewIssue]) -> ReviewResponse:
@@ -34,7 +40,7 @@ def _to_response(review: DocumentReview, issues: list[DocumentReviewIssue]) -> R
                 description=issue.description,
                 related_document_id=issue.related_document_ref,
                 charter_rule_id=issue.charter_rule_id,
-                location_ref=issue.location_ref,
+                location_ref=_to_location_ref(issue.location_ref),
             )
             for issue in issues
         ],
@@ -48,9 +54,19 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
         rule_contexts = [
             CharterRuleContext(id=rule.id, title=rule.title, description=rule.description) for rule in charter_rules
         ]
-        llm_result = call_document_lion_llm(payload.content, rule_contexts, locale=payload.locale)
+        llm_result = call_document_lion_llm(
+            payload.content, rule_contexts, locale=payload.locale, blocks=payload.blocks
+        )
+        # LLM이 만들어낸 존재하지 않는 blockId를 걸러내기 위해 실제로 전달한 집합을 넘긴다.
+        valid_block_ids = {b.block_id for b in payload.blocks} if payload.blocks else None
         review, issues = create_review(
-            db, payload.document_id, payload.doc_pr_id, payload.trigger_type, payload.requested_by, llm_result.issues
+            db,
+            payload.document_id,
+            payload.doc_pr_id,
+            payload.trigger_type,
+            payload.requested_by,
+            llm_result.issues,
+            valid_block_ids=valid_block_ids,
         )
     except Exception:
         logger.exception("document lion review failed for document_id=%s", payload.document_id)
