@@ -66,3 +66,16 @@ def test_raises_on_malformed_response(mock_get_client):
 
     with pytest.raises(RuntimeError):
         call_writing_assistant_llm("본문 내용", "커서 주변 문맥")
+
+
+@patch("app.services.writing_assistant.get_genai_client")
+def test_prompt_requires_korean_output(mock_get_client):
+    """제안 본문은 한국어로 내려와야 한다 — 프롬프트에 출력 언어 지시가 있어야 한다."""
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = MagicMock(parsed=LLMSuggestionsResult(suggestions=[]))
+    mock_get_client.return_value = mock_client
+
+    call_writing_assistant_llm("본문 내용", "커서 주변 문맥")
+
+    prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+    assert "in Korean" in prompt
