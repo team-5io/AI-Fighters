@@ -56,34 +56,3 @@ def test_llm_failure_returns_502(mock_llm):
 
     assert response.status_code == 502
     assert response.json() == {"error": "writing_assistant_failed"}
-
-
-@patch("app.api.routes.writing_assistant.review_ai_output")
-@patch("app.api.routes.writing_assistant.call_writing_assistant_llm")
-def test_passes_locale_to_service(mock_llm, mock_cio):
-    mock_llm.return_value = [LLMSuggestion(type="structure", text="섹션을 나누세요")]
-    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
-
-    response = client.post(
-        "/api/ai/writing-assistant/suggestions", json={**_request_body(), "locale": "ja"}
-    )
-
-    assert response.status_code == 200
-    assert mock_llm.call_args.kwargs["locale"] == "ja"
-
-
-@patch("app.api.routes.writing_assistant.review_ai_output")
-@patch("app.api.routes.writing_assistant.call_writing_assistant_llm")
-def test_locale_is_optional(mock_llm, mock_cio):
-    """locale이 없어도 422가 아니라 정상 동작해야 한다.
-
-    required로 잡으면 BE가 아직 locale을 안 보내는 구간의 모든 호출이 422가 되고,
-    BE가 이를 502로 감싸 내려보내 화면에는 "AI 장애"로 보인다.
-    """
-    mock_llm.return_value = [LLMSuggestion(type="structure", text="섹션을 나누세요")]
-    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
-
-    response = client.post("/api/ai/writing-assistant/suggestions", json=_request_body())
-
-    assert response.status_code == 200
-    assert mock_llm.call_args.kwargs["locale"] is None

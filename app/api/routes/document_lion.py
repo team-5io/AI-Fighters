@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,6 @@ from app.db.session import get_db
 from app.models.document_review import DocumentReview
 from app.models.document_review_issue import DocumentReviewIssue
 from app.schemas.document_lion import LocationRef, ReviewIssue, ReviewRequest, ReviewResponse
-from app.services.ai_text_translation import TranslatableField, translate_fields
 from app.services.cio_orchestrator import review_ai_output
 from app.services.document_lion import (
     CharterRuleContext,
@@ -31,10 +30,7 @@ def _to_location_ref(raw: str | None) -> LocationRef | None:
     return LocationRef.model_validate(parsed) if parsed else None
 
 
-def _to_response(
-    review: DocumentReview, issues: list[DocumentReviewIssue], translated: dict | None = None
-) -> ReviewResponse:
-    translated = translated or {}
+def _to_response(review: DocumentReview, issues: list[DocumentReviewIssue]) -> ReviewResponse:
     return ReviewResponse(
         review_id=review.id,
         overall_verdict=review.overall_verdict,
@@ -42,7 +38,7 @@ def _to_response(
             ReviewIssue(
                 severity=issue.severity,
                 issue_type=issue.issue_type,
-                description=translated.get((issue.id, "description"), issue.description),
+                description=issue.description,
                 related_document_id=issue.related_document_ref,
                 charter_rule_id=issue.charter_rule_id,
                 location_ref=_to_location_ref(issue.location_ref),
@@ -76,7 +72,6 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
         llm_result = call_document_lion_llm(
             payload.content,
             rule_contexts,
-            locale=payload.locale,
             blocks=payload.blocks,
             related_documents=related_contexts,
         )
@@ -94,7 +89,6 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
             llm_result.issues,
             valid_block_ids=valid_block_ids,
             valid_related_document_ids=valid_related_document_ids,
-            locale=payload.locale,
         )
     except Exception:
         logger.exception("document lion review failed for document_id=%s", payload.document_id)
@@ -111,25 +105,9 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
 
 
 @router.get("/reviews/{review_id}", response_model=ReviewResponse)
-def get_review_route(
-    review_id: UUID, locale: str | None = Query(None), db: Session = Depends(get_db)
-) -> ReviewResponse:
+def get_review_route(review_id: UUID, db: Session = Depends(get_db)) -> ReviewResponse:
     result = get_review(db, review_id)
     if result is None:
         raise HTTPException(status_code=404, detail="review_not_found")
     review, issues = result
-    # 이슈의 원본 언어는 부모 리뷰를 따른다 — 한 리뷰의 이슈들은 단일 LLM 호출로
-    # 생성되므로 언어가 항상 같고, 그래서 칸을 부모에만 뒀다.
-    # location_ref는 원문 문서를 가리키는 포인터라 번역 대상이 아니다.
-    fields = [
-        TranslatableField(
-            entity_type="document_review_issue",
-            entity_id=issue.id,
-            field="description",
-            source_locale=review.source_locale,
-            text=issue.description,
-        )
-        for issue in issues
-    ]
-    translated = translate_fields(db, fields, locale)
-    return _to_response(review, issues, translated)
+    return _to_response(review, issues)

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from app.api.routes import charter, document_lion, translation, writing_assistant
 from app.db.session import get_db
 from app.models import (
-    AiTextTranslation,
     CharterRule,
     DocumentReview,
     DocumentReviewIssue,
@@ -30,7 +29,6 @@ _SCHEMA_CHECK_MODELS = (
     CharterRule,
     DocumentReview,
     DocumentReviewIssue,
-    AiTextTranslation,
     TranslationCache,
     WritingSuggestionLog,
 )

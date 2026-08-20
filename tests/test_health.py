@@ -1,7 +1,7 @@
 """배포 헬스체크.
 
 CD의 deploy job은 `curl -sf /health` 하나로 성공을 판정한다. 이전 구현은 상수를 돌려줘서
-DB 스키마가 코드와 어긋나도 200을 냈다 — 2026-08-21 source_locale 컬럼 누락 때 배포가
+DB 스키마가 코드와 어긋나도 200을 냈다 — 2026-08-21에 컬럼 하나가 빠진 채로 배포가
 success로 찍히면서 charter/review 엔드포인트만 500이었다. 그 장애를 잡기 위한 것이다.
 """
 
@@ -52,7 +52,7 @@ def test_queries_every_table_the_app_reads():
 def test_503_when_column_missing():
     """UndefinedColumn이 나면 배포가 실패로 판정돼야 한다."""
     db = MagicMock()
-    db.query.side_effect = Exception('column charter_rule.source_locale does not exist')
+    db.query.side_effect = Exception("column charter_rule.some_new_column does not exist")
     _override_get_db(db)
 
     response = client.get("/health")
