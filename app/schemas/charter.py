@@ -27,6 +27,8 @@ class GenerateCharterResponse(CamelModel):
 class UpdateRuleRequest(CamelModel):
     title: str
     description: str
+    # 일본 사용자가 한국어 규칙을 일본어로 고쳐 쓸 수 있다 — 원본 언어도 함께 갱신한다.
+    locale: str | None = None
 
 
 class AdoptRulesRequest(CamelModel):

@@ -67,6 +67,7 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
             payload.requested_by,
             llm_result.issues,
             valid_block_ids=valid_block_ids,
+            locale=payload.locale,
         )
     except Exception:
         logger.exception("document lion review failed for document_id=%s", payload.document_id)

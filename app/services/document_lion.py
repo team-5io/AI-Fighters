@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.locale import language_instruction
+from app.core.locale import language_instruction, normalize_locale
 from app.models.charter_rule import CharterRule
 from app.models.document_review import DocumentReview
 from app.models.document_review_issue import DocumentReviewIssue
@@ -149,6 +149,7 @@ def create_review(
     requested_by: UUID,
     llm_issues: list[LLMReviewIssue],
     valid_block_ids: set[str] | None = None,
+    locale: str | None = None,
 ) -> tuple[DocumentReview, list[DocumentReviewIssue]]:
     overall_verdict = "reject_recommended" if any(issue.severity == "critical" for issue in llm_issues) else "approve"
     review = DocumentReview(
@@ -157,6 +158,9 @@ def create_review(
         trigger_type=trigger_type,
         overall_verdict=overall_verdict,
         requested_by_ref=requested_by,
+        # 한 리뷰의 이슈들은 단일 LLM 호출로 생성되므로 언어가 항상 같다.
+        # 그래서 칸을 자식(issue)이 아니라 부모(review)에만 둔다.
+        source_locale=normalize_locale(locale),
     )
     db.add(review)
     db.flush()

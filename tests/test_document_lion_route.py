@@ -288,3 +288,19 @@ def test_hallucinated_block_id_is_dropped_end_to_end(mock_rules, mock_llm, mock_
             json=_review_body(blocks=[{"blockId": "b-1", "content": "첫 문단"}]),
         )
         assert mock_create.call_args.kwargs["valid_block_ids"] == {"b-1"}
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_passes_locale_to_persistence(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    client.post("/api/ai/document-lion/reviews", json=_review_body(locale="ja"))
+
+    assert mock_create.call_args.kwargs["locale"] == "ja"

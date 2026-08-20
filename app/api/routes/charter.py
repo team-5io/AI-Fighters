@@ -40,7 +40,7 @@ def generate_charter(
 ) -> GenerateCharterResponse | JSONResponse:
     try:
         llm_rules = call_charter_llm(locale=payload.locale)
-        rows = create_draft_rules(db, payload.team_id, llm_rules)
+        rows = create_draft_rules(db, payload.team_id, llm_rules, locale=payload.locale)
     except Exception:
         logger.exception("charter generation failed for team_id=%s", payload.team_id)
         return JSONResponse(status_code=502, content={"error": "charter_generation_failed"})
@@ -53,7 +53,7 @@ def update_rule(rule_id: UUID, payload: UpdateRuleRequest, db: Session = Depends
     rule = get_rule(db, rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="rule_not_found")
-    update_rule_service(db, rule, payload.title, payload.description)
+    update_rule_service(db, rule, payload.title, payload.description, locale=payload.locale)
 
 
 @router.post("/adopt", status_code=204)

@@ -145,3 +145,46 @@ def test_generate_locale_is_optional(mock_llm, mock_create):
 
     assert response.status_code == 200
     assert mock_llm.call_args.kwargs["locale"] is None
+
+
+@patch("app.api.routes.charter.create_draft_rules")
+@patch("app.api.routes.charter.call_charter_llm")
+def test_generate_passes_locale_to_persistence(mock_llm, mock_create):
+    """생성 시점 locale은 프롬프트에만 쓰이면 안 된다 — source_locale로 저장돼야 한다."""
+    _override_get_db(MagicMock())
+    mock_llm.return_value = [LLMCharterRule(title="리뷰 SLA", description="24시간 이내 리뷰")]
+    mock_create.return_value = [_fake_rule()]
+
+    client.post("/api/ai/charter/generate", json={"teamId": 1, "locale": "ja"})
+
+    assert mock_create.call_args.kwargs["locale"] == "ja"
+
+
+@patch("app.api.routes.charter.update_rule_service")
+@patch("app.api.routes.charter.get_rule")
+def test_update_rule_passes_locale(mock_get, mock_update):
+    _override_get_db(MagicMock())
+    mock_get.return_value = _fake_rule()
+
+    response = client.patch(
+        f"/api/ai/charter/rules/{uuid4()}",
+        json={"title": "새 제목", "description": "새 설명", "locale": "ja"},
+    )
+
+    assert response.status_code == 204
+    assert mock_update.call_args.kwargs["locale"] == "ja"
+
+
+@patch("app.api.routes.charter.update_rule_service")
+@patch("app.api.routes.charter.get_rule")
+def test_update_rule_locale_is_optional(mock_get, mock_update):
+    _override_get_db(MagicMock())
+    mock_get.return_value = _fake_rule()
+
+    response = client.patch(
+        f"/api/ai/charter/rules/{uuid4()}",
+        json={"title": "새 제목", "description": "새 설명"},
+    )
+
+    assert response.status_code == 204
+    assert mock_update.call_args.kwargs["locale"] is None
