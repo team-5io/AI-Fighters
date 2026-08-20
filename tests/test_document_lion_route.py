@@ -141,3 +141,49 @@ def test_get_review_returns_404_when_not_found(mock_get_review):
     response = client.get(f"/api/ai/document-lion/reviews/{uuid4()}")
 
     assert response.status_code == 404
+
+
+def _review_body(**overrides):
+    body = {
+        "documentId": 100,
+        "teamId": 1,
+        "triggerType": "manual",
+        "requestedBy": str(uuid4()),
+        "content": "문서 본문",
+    }
+    body.update(overrides)
+    return body
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_passes_locale_to_service(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body(locale="ja"))
+
+    assert response.status_code == 200
+    assert mock_llm.call_args.kwargs["locale"] == "ja"
+
+
+@patch("app.api.routes.document_lion.review_ai_output")
+@patch("app.api.routes.document_lion.create_review")
+@patch("app.api.routes.document_lion.call_document_lion_llm")
+@patch("app.api.routes.document_lion.fetch_adopted_charter_rules")
+def test_locale_is_optional(mock_rules, mock_llm, mock_create, mock_cio):
+    _override_get_db(MagicMock())
+    mock_rules.return_value = []
+    mock_llm.return_value = LLMReviewResult(issues=[])
+    mock_create.return_value = (_fake_review(), [])
+    mock_cio.return_value = CioReviewVerdict(approved=True, concerns=[])
+
+    response = client.post("/api/ai/document-lion/reviews", json=_review_body())
+
+    assert response.status_code == 200
+    assert mock_llm.call_args.kwargs["locale"] is None

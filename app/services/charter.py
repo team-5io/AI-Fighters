@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.locale import language_instruction
 from app.models.charter_rule import CharterRule
 from app.services.llm_client import get_genai_client
 
@@ -19,7 +20,7 @@ class LLMCharterRulesResult(BaseModel):
     rules: list[LLMCharterRule]
 
 
-def call_charter_llm(count: int | None = None) -> list[LLMCharterRule]:
+def call_charter_llm(count: int | None = None, locale: str | None = None) -> list[LLMCharterRule]:
     rule_count = count if count is not None else settings.charter_generation_rule_count
     # teamId만으로는 실제 협업 이력(Doc PR 리뷰 시간, 커뮤니케이션 패턴 등)을 분석할 데이터
     # 소스가 아직 없다 (BE 활동 로그 연동 전) — 그래서 실제 팀 행동 분석 대신, 일반적인
@@ -32,7 +33,8 @@ def call_charter_llm(count: int | None = None) -> list[LLMCharterRule]:
         "(similar to a git pull request, but for docs). Cover distinct topics such as "
         "review turnaround time, communication channels, documentation standards, "
         "conflict resolution, and meeting norms. Each rule needs a short title and a "
-        "one-paragraph description, written in Korean."
+        "one-paragraph description. "
+        f"{language_instruction(locale)}"
     )
     response = get_genai_client().models.generate_content(
         model=settings.gemini_model,

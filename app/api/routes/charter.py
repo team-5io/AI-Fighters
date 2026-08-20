@@ -39,7 +39,7 @@ def generate_charter(
     payload: GenerateCharterRequest, db: Session = Depends(get_db)
 ) -> GenerateCharterResponse | JSONResponse:
     try:
-        llm_rules = call_charter_llm()
+        llm_rules = call_charter_llm(locale=payload.locale)
         rows = create_draft_rules(db, payload.team_id, llm_rules)
     except Exception:
         logger.exception("charter generation failed for team_id=%s", payload.team_id)

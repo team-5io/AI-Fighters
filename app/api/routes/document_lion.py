@@ -48,7 +48,7 @@ def create_review_route(payload: ReviewRequest, db: Session = Depends(get_db)) -
         rule_contexts = [
             CharterRuleContext(id=rule.id, title=rule.title, description=rule.description) for rule in charter_rules
         ]
-        llm_result = call_document_lion_llm(payload.content, rule_contexts)
+        llm_result = call_document_lion_llm(payload.content, rule_contexts, locale=payload.locale)
         review, issues = create_review(
             db, payload.document_id, payload.doc_pr_id, payload.trigger_type, payload.requested_by, llm_result.issues
         )

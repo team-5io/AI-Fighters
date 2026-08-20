@@ -23,7 +23,7 @@ def review_ai_output(function_name: str, source_content: str, output_text: str) 
         f"생성물:\n{output_text}"
     )
     response = get_genai_client().models.generate_content(
-        model=settings.gemini_model,
+        model=settings.effective_cio_model,
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",

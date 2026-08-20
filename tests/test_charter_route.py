@@ -119,3 +119,29 @@ def test_list_rules_returns_rules_for_team(mock_list):
     body = response.json()
     assert len(body["rules"]) == 1
     assert body["rules"][0]["status"] == "adopted"
+
+
+@patch("app.api.routes.charter.create_draft_rules")
+@patch("app.api.routes.charter.call_charter_llm")
+def test_generate_passes_locale_to_service(mock_llm, mock_create):
+    _override_get_db(MagicMock())
+    mock_llm.return_value = [LLMCharterRule(title="리뷰 SLA", description="24시간 이내 리뷰")]
+    mock_create.return_value = [_fake_rule()]
+
+    response = client.post("/api/ai/charter/generate", json={"teamId": 1, "locale": "ja"})
+
+    assert response.status_code == 200
+    assert mock_llm.call_args.kwargs["locale"] == "ja"
+
+
+@patch("app.api.routes.charter.create_draft_rules")
+@patch("app.api.routes.charter.call_charter_llm")
+def test_generate_locale_is_optional(mock_llm, mock_create):
+    _override_get_db(MagicMock())
+    mock_llm.return_value = [LLMCharterRule(title="리뷰 SLA", description="24시간 이내 리뷰")]
+    mock_create.return_value = [_fake_rule()]
+
+    response = client.post("/api/ai/charter/generate", json={"teamId": 1})
+
+    assert response.status_code == 200
+    assert mock_llm.call_args.kwargs["locale"] is None

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.locale import language_instruction
 from app.models.charter_rule import CharterRule
 from app.models.document_review import DocumentReview
 from app.models.document_review_issue import DocumentReviewIssue
@@ -44,7 +45,9 @@ def fetch_related_documents(document_id: int) -> list[dict]:
     return []
 
 
-def call_document_lion_llm(content: str, charter_rules: list[CharterRuleContext]) -> LLMReviewResult:
+def call_document_lion_llm(
+    content: str, charter_rules: list[CharterRuleContext], locale: str | None = None
+) -> LLMReviewResult:
     rules_text = "\n".join(f"- ({r.id}) {r.title}: {r.description}" for r in charter_rules) or "(채택된 협업 규칙 없음)"
     prompt = (
         "다음 문서 내용을 검토해서 문제가 있으면 issue로 보고해라.\n"
@@ -52,11 +55,12 @@ def call_document_lion_llm(content: str, charter_rules: list[CharterRuleContext]
         "심각도(severity: 'critical'/'medium'/'minor')와 함께 보고해라. "
         "위반한 규칙이 명확하면 charter_rule_id에 해당 규칙의 괄호 안 UUID를 그대로 넣어라. "
         "문제가 없으면 issues를 빈 배열로 반환해라.\n\n"
+        f"{language_instruction(locale)}\n\n"
         f"협업 규칙:\n{rules_text}\n\n"
         f"문서 내용:\n{content}"
     )
     response = get_genai_client().models.generate_content(
-        model=settings.gemini_model,
+        model=settings.effective_document_lion_model,
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
